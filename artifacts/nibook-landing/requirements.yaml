@@ -1,0 +1,13 @@
+packages:
+  "framer-motion": "For smooth scroll reveal animations and modern landing page interactions"
+  "clsx": "For conditional class name merging"
+  "tailwind-merge": "For properly merging Tailwind CSS classes"
+
+images:
+  - path: "artifacts/nibook-landing/public/images/hero-mockup.png"
+    description: "A clean, stylized isometric 3D mockup of a modern mobile phone and a web browser window showing a beautiful calendar and appointment booking dashboard interface with purple and white colors. Soft lighting, professional SaaS aesthetic."
+    aspect_ratio: "16:9"
+
+notes:
+  - "The app uses framer-motion for all scroll animations."
+  - "A dummy mutation hook is provided for the waitlist/newsletter signup to demonstrate complete wiring."
