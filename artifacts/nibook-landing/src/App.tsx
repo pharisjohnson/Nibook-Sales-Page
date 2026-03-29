@@ -11,6 +11,8 @@ import DashboardHome from "@/pages/dashboard";
 import ServicesPage from "@/pages/services";
 import BookingsPage from "@/pages/bookings";
 import AvailabilityPage from "@/pages/availability";
+import TeamPage from "@/pages/team";
+import SettingsPage from "@/pages/settings";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -47,6 +49,18 @@ function Router() {
       <Route path="/availability">
         <DashboardLayout>
           <AvailabilityPage />
+        </DashboardLayout>
+      </Route>
+
+      <Route path="/team">
+        <DashboardLayout>
+          <TeamPage />
+        </DashboardLayout>
+      </Route>
+
+      <Route path="/settings">
+        <DashboardLayout>
+          <SettingsPage />
         </DashboardLayout>
       </Route>
 
