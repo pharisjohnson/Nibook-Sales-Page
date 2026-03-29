@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Calendar, Menu, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [, setLocation] = useLocation();
   const { toast } = useToast();
 
   useEffect(() => {
@@ -22,9 +23,11 @@ export function Navbar() {
   ];
 
   const handleAuthClick = (type: string) => {
+    // For demo purposes, route to dashboard directly
+    setLocation("/dashboard");
     toast({
-      title: `${type} Flow`,
-      description: "This would open the authentication modal or navigate to the auth app.",
+      title: "Welcome back!",
+      description: "Redirecting to your dashboard...",
     });
   };
 
