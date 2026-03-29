@@ -15,9 +15,14 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Plus, MoreHorizontal, Clock, DollarSign, Image as ImageIcon, AlertCircle } from "lucide-react";
-import { useState } from "react";
+import {
+  Plus, MoreHorizontal, Clock, DollarSign, Image as ImageIcon,
+  AlertCircle, Upload, X, ChevronLeft, ChevronRight,
+} from "lucide-react";
+import { useState, useRef, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
+
+const MAX_IMAGES = 2;
 
 type Service = {
   id: number;
@@ -26,6 +31,7 @@ type Service = {
   duration: number;
   active: boolean;
   color: string;
+  images: string[];
 };
 
 const gradients = [
@@ -38,22 +44,212 @@ const gradients = [
 ];
 
 const initialServices: Service[] = [
-  { id: 1, name: "Hair Braiding", price: "2,500", duration: 120, active: true, color: gradients[0] },
-  { id: 2, name: "Beard Trim & Shape", price: "800", duration: 30, active: true, color: gradients[1] },
-  { id: 3, name: "Locs Retwist", price: "3,500", duration: 180, active: false, color: gradients[2] },
+  { id: 1, name: "Hair Braiding", price: "2,500", duration: 120, active: true, color: gradients[0], images: [] },
+  { id: 2, name: "Beard Trim & Shape", price: "800", duration: 30, active: true, color: gradients[1], images: [] },
+  { id: 3, name: "Locs Retwist", price: "3,500", duration: 180, active: false, color: gradients[2], images: [] },
 ];
 
 const MAX_FREE_SERVICES = 3;
 
+/* ── Scrollable image banner on the service card ── */
+function ServiceImageBanner({ service }: { service: Service }) {
+  const [activeIdx, setActiveIdx] = useState(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const scrollTo = (idx: number) => {
+    setActiveIdx(idx);
+    scrollRef.current?.children[idx]?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" });
+  };
+
+  if (service.images.length === 0) {
+    return (
+      <div className={`h-36 bg-gradient-to-br ${service.color} flex items-center justify-center relative`}>
+        <ImageIcon className="w-10 h-10 text-white/40" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative h-36 group">
+      {/* Scroll container */}
+      <div
+        ref={scrollRef}
+        className="h-full flex overflow-x-auto scroll-smooth snap-x snap-mandatory scrollbar-none"
+        style={{ scrollbarWidth: "none" }}
+        onScroll={e => {
+          const el = e.currentTarget;
+          const idx = Math.round(el.scrollLeft / el.clientWidth);
+          setActiveIdx(idx);
+        }}
+      >
+        {service.images.map((img, i) => (
+          <img
+            key={i}
+            src={img}
+            alt={`${service.name} photo ${i + 1}`}
+            className="h-full w-full object-cover shrink-0 snap-start"
+          />
+        ))}
+      </div>
+
+      {/* Dots */}
+      {service.images.length > 1 && (
+        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-10">
+          {service.images.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => scrollTo(i)}
+              className={`rounded-full transition-all ${
+                activeIdx === i ? "w-4 h-2 bg-white" : "w-2 h-2 bg-white/50 hover:bg-white/80"
+              }`}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Prev / Next arrows */}
+      {service.images.length > 1 && (
+        <>
+          <button
+            onClick={() => scrollTo(Math.max(0, activeIdx - 1))}
+            className="absolute left-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-black/30 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => scrollTo(Math.min(service.images.length - 1, activeIdx + 1))}
+            className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-black/30 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </>
+      )}
+
+      {/* Image count badge */}
+      {service.images.length > 1 && (
+        <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-black/40 text-white text-xs backdrop-blur-sm">
+          {activeIdx + 1} / {service.images.length}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Image upload area inside the dialog ── */
+function ImageUploadArea({
+  images,
+  onChange,
+}: {
+  images: string[];
+  onChange: (imgs: string[]) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+
+  const readFile = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      if (!file.type.startsWith("image/")) { reject("Not an image"); return; }
+      const reader = new FileReader();
+      reader.onload = e => resolve(e.target?.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+  const addFiles = useCallback(
+    async (files: FileList | null) => {
+      if (!files) return;
+      const remaining = MAX_IMAGES - images.length;
+      if (remaining <= 0) return;
+      const toProcess = Array.from(files).slice(0, remaining);
+      const results = await Promise.all(toProcess.map(readFile).map(p => p.catch(() => null)));
+      const valid = results.filter(Boolean) as string[];
+      if (valid.length) onChange([...images, ...valid]);
+    },
+    [images, onChange]
+  );
+
+  const remove = (idx: number) => onChange(images.filter((_, i) => i !== idx));
+
+  const canAdd = images.length < MAX_IMAGES;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <Label>Photos <span className="text-muted-foreground font-normal text-xs">(up to {MAX_IMAGES})</span></Label>
+        <span className="text-xs text-muted-foreground">{images.length} / {MAX_IMAGES} added</span>
+      </div>
+
+      {/* Previews */}
+      {images.length > 0 && (
+        <div className="flex gap-3">
+          {images.map((img, i) => (
+            <div key={i} className="relative w-24 h-20 rounded-lg overflow-hidden border border-border group shrink-0">
+              <img src={img} alt={`preview ${i + 1}`} className="w-full h-full object-cover" />
+              <button
+                onClick={() => remove(i)}
+                className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <X className="w-3 h-3" />
+              </button>
+              <div className="absolute bottom-1 left-1 text-[10px] bg-black/50 text-white px-1 rounded">
+                Photo {i + 1}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Drop zone */}
+      {canAdd && (
+        <div
+          onClick={() => inputRef.current?.click()}
+          onDragOver={e => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={e => { e.preventDefault(); setDragging(false); addFiles(e.dataTransfer.files); }}
+          className={`flex flex-col items-center justify-center gap-2 p-5 border-2 border-dashed rounded-xl cursor-pointer transition-all ${
+            dragging
+              ? "border-primary bg-primary/5 scale-[1.01]"
+              : "border-border/70 hover:border-primary/50 hover:bg-muted/40"
+          }`}
+        >
+          <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center">
+            <Upload className="w-4 h-4 text-primary" />
+          </div>
+          <div className="text-center">
+            <p className="text-sm font-medium">Click or drag image here</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              JPG, PNG, WEBP — {MAX_IMAGES - images.length} slot{MAX_IMAGES - images.length !== 1 ? "s" : ""} remaining
+            </p>
+          </div>
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={e => addFiles(e.target.files)}
+          />
+        </div>
+      )}
+
+      {!canAdd && (
+        <p className="text-xs text-muted-foreground text-center py-1">
+          Maximum {MAX_IMAGES} photos reached. Remove one to replace it.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/* ── Main page ── */
 export default function ServicesPage() {
   const { toast } = useToast();
   const [services, setServices] = useState<Service[]>(initialServices);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [form, setForm] = useState({ name: "", price: "", duration: "60" });
+  const [formImages, setFormImages] = useState<string[]>([]);
   const [formError, setFormError] = useState("");
-
-  const activeCount = services.filter(s => s.active).length;
 
   const openAdd = () => {
     if (services.length >= MAX_FREE_SERVICES) {
@@ -62,13 +258,15 @@ export default function ServicesPage() {
     }
     setEditingService(null);
     setForm({ name: "", price: "", duration: "60" });
+    setFormImages([]);
     setFormError("");
     setDialogOpen(true);
   };
 
   const openEdit = (service: Service) => {
     setEditingService(service);
-    setForm({ name: service.name, price: service.price.replace(",", ""), duration: String(service.duration) });
+    setForm({ name: service.name, price: service.price.replace(/,/g, ""), duration: String(service.duration) });
+    setFormImages(service.images);
     setFormError("");
     setDialogOpen(true);
   };
@@ -77,13 +275,12 @@ export default function ServicesPage() {
     if (!form.name.trim()) { setFormError("Service name is required."); return; }
     if (!form.price.trim() || isNaN(Number(form.price))) { setFormError("Please enter a valid price."); return; }
     setFormError("");
-
     const priceFormatted = Number(form.price).toLocaleString();
 
     if (editingService) {
       setServices(services.map(s =>
         s.id === editingService.id
-          ? { ...s, name: form.name, price: priceFormatted, duration: Number(form.duration) }
+          ? { ...s, name: form.name, price: priceFormatted, duration: Number(form.duration), images: formImages }
           : s
       ));
       toast({ title: "Service updated", description: `"${form.name}" has been updated.` });
@@ -95,6 +292,7 @@ export default function ServicesPage() {
         duration: Number(form.duration),
         active: true,
         color: gradients[services.length % gradients.length],
+        images: formImages,
       };
       setServices([...services, newService]);
       toast({ title: "Service added", description: `"${form.name}" is now live on your booking page.` });
@@ -144,12 +342,18 @@ export default function ServicesPage() {
             transition={{ delay: idx * 0.07 }}
           >
             <Card className={`overflow-hidden shadow-sm transition-all duration-300 hover:shadow-md ${!service.active ? "opacity-70 grayscale-[0.3]" : ""}`}>
-              <div className={`h-32 bg-gradient-to-br ${service.color} flex items-center justify-center relative`}>
-                <ImageIcon className="w-10 h-10 text-white/50" />
-                <div className="absolute top-3 right-3">
+              {/* Image banner — scrollable if photos exist */}
+              <div className="relative">
+                <ServiceImageBanner service={service} />
+                {/* Actions menu overlay */}
+                <div className="absolute top-3 right-3 z-10">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 bg-black/20 text-white hover:bg-black/40 backdrop-blur-sm border-none">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 bg-black/25 text-white hover:bg-black/45 backdrop-blur-sm border-none"
+                      >
                         <MoreHorizontal className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
@@ -165,6 +369,7 @@ export default function ServicesPage() {
                   </DropdownMenu>
                 </div>
               </div>
+
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <h3 className="font-bold text-lg line-clamp-1">{service.name}</h3>
@@ -229,15 +434,20 @@ export default function ServicesPage() {
         </div>
       </div>
 
+      {/* Add / Edit Service dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingService ? "Edit Service" : "Add New Service"}</DialogTitle>
             <DialogDescription>
-              {editingService ? "Update your service details below." : "Add a new service that clients can book on your public page."}
+              {editingService ? "Update your service details and photos." : "Add a new service with photos that clients will see when booking."}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+
+          <div className="space-y-5 py-2">
+            {/* Image upload */}
+            <ImageUploadArea images={formImages} onChange={setFormImages} />
+
             <div className="space-y-2">
               <Label htmlFor="svc-name">Service name <span className="text-destructive">*</span></Label>
               <Input
@@ -247,6 +457,7 @@ export default function ServicesPage() {
                 onChange={e => { setForm({ ...form, name: e.target.value }); setFormError(""); }}
               />
             </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="svc-price">Price (KES) <span className="text-destructive">*</span></Label>
@@ -278,12 +489,14 @@ export default function ServicesPage() {
                 </Select>
               </div>
             </div>
+
             {formError && (
               <p className="text-sm text-destructive flex items-center gap-1.5">
                 <AlertCircle className="w-4 h-4 shrink-0" /> {formError}
               </p>
             )}
           </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleSave}>{editingService ? "Save Changes" : "Add Service"}</Button>
