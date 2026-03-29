@@ -35,9 +35,8 @@ export function Hero() {
           className="text-5xl md:text-6xl lg:text-7xl font-extrabold text-foreground tracking-tight text-balance max-w-4xl"
         >
           Your Business, Booked. <br className="hidden md:block" />
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-accent">
-            Managed. Thriving.
-          </span>
+          <span className="text-primary">Managed.</span>{" "}
+          <span className="text-accent">Thriving.</span>
         </motion.h1>
 
         <motion.p
