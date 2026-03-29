@@ -79,50 +79,52 @@
   --elevate-1: rgba(0,0,0, .03);
   --elevate-2: rgba(0,0,0, .08);
 
-  --background: 40 33% 98%;
-  --foreground: 260 40% 10%;
-  --border: 260 15% 90%;
-  
+  /* #0066CC = Science Blue (primary), #FF6B6B = Bitter (accent), #4CB963 = Green */
+
+  --background: 0 0% 98%;
+  --foreground: 215 25% 10%;
+  --border: 215 15% 88%;
+
   --card: 0 0% 100%;
-  --card-foreground: 260 40% 10%;
-  --card-border: 260 15% 90%;
+  --card-foreground: 215 25% 10%;
+  --card-border: 215 15% 88%;
 
   --sidebar: 0 0% 100%;
-  --sidebar-foreground: 260 40% 10%;
-  --sidebar-border: 260 15% 90%;
-  --sidebar-primary: 263 70% 42%;
+  --sidebar-foreground: 215 25% 10%;
+  --sidebar-border: 215 15% 88%;
+  --sidebar-primary: 210 100% 40%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 260 20% 96%;
-  --sidebar-accent-foreground: 263 70% 42%;
-  --sidebar-ring: 263 70% 42%;
+  --sidebar-accent: 210 60% 96%;
+  --sidebar-accent-foreground: 210 100% 40%;
+  --sidebar-ring: 210 100% 40%;
 
   --popover: 0 0% 100%;
-  --popover-foreground: 260 40% 10%;
-  --popover-border: 260 15% 90%;
+  --popover-foreground: 215 25% 10%;
+  --popover-border: 215 15% 88%;
 
-  --primary: 263 70% 42%;
+  --primary: 210 100% 40%;
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 260 20% 96%;
-  --secondary-foreground: 263 70% 42%;
+  --secondary: 210 60% 95%;
+  --secondary-foreground: 210 100% 40%;
 
-  --muted: 260 15% 94%;
-  --muted-foreground: 260 15% 40%;
+  --muted: 215 15% 93%;
+  --muted-foreground: 215 15% 42%;
 
-  --accent: 43 96% 50%;
+  --accent: 0 100% 71%;
   --accent-foreground: 0 0% 100%;
 
-  --destructive: 0 84% 60%;
+  --destructive: 0 100% 71%;
   --destructive-foreground: 0 0% 100%;
 
-  --input: 260 15% 90%;
-  --ring: 263 70% 42%;
-  
-  --chart-1: 263 70% 42%;
-  --chart-2: 43 96% 50%;
-  --chart-3: 180 40% 50%;
-  --chart-4: 330 50% 60%;
-  --chart-5: 20 80% 60%;
+  --input: 215 15% 88%;
+  --ring: 210 100% 40%;
+
+  --chart-1: 210 100% 40%;
+  --chart-2: 0 100% 71%;
+  --chart-3: 129 41% 51%;
+  --chart-4: 39 100% 50%;
+  --chart-5: 215 25% 30%;
 
   --radius: 1rem;
   --shadow-2xs: 0px 2px 0px 0px rgba(0,0,0,0.02);
@@ -153,50 +155,50 @@
   --elevate-1: rgba(255,255,255, .04);
   --elevate-2: rgba(255,255,255, .09);
 
-  --background: 260 40% 4%;
-  --foreground: 40 33% 98%;
-  --border: 260 20% 15%;
-  
-  --card: 260 30% 6%;
-  --card-foreground: 40 33% 98%;
-  --card-border: 260 20% 15%;
+  --background: 215 30% 7%;
+  --foreground: 0 0% 95%;
+  --border: 215 20% 18%;
 
-  --sidebar: 260 30% 6%;
-  --sidebar-foreground: 40 33% 98%;
-  --sidebar-border: 260 20% 15%;
-  --sidebar-primary: 263 70% 55%;
+  --card: 215 25% 10%;
+  --card-foreground: 0 0% 95%;
+  --card-border: 215 20% 18%;
+
+  --sidebar: 215 25% 10%;
+  --sidebar-foreground: 0 0% 95%;
+  --sidebar-border: 215 20% 18%;
+  --sidebar-primary: 210 100% 55%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 260 20% 15%;
-  --sidebar-accent-foreground: 263 70% 55%;
-  --sidebar-ring: 263 70% 55%;
+  --sidebar-accent: 215 20% 18%;
+  --sidebar-accent-foreground: 210 100% 55%;
+  --sidebar-ring: 210 100% 55%;
 
-  --popover: 260 30% 6%;
-  --popover-foreground: 40 33% 98%;
-  --popover-border: 260 20% 15%;
+  --popover: 215 25% 10%;
+  --popover-foreground: 0 0% 95%;
+  --popover-border: 215 20% 18%;
 
-  --primary: 263 70% 55%;
+  --primary: 210 100% 55%;
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 260 20% 15%;
-  --secondary-foreground: 40 33% 98%;
+  --secondary: 215 20% 18%;
+  --secondary-foreground: 0 0% 95%;
 
-  --muted: 260 20% 15%;
-  --muted-foreground: 260 15% 60%;
+  --muted: 215 20% 18%;
+  --muted-foreground: 215 15% 60%;
 
-  --accent: 43 96% 50%;
-  --accent-foreground: 0 0% 10%;
+  --accent: 0 100% 71%;
+  --accent-foreground: 0 0% 100%;
 
-  --destructive: 0 84% 60%;
+  --destructive: 0 100% 71%;
   --destructive-foreground: 0 0% 100%;
 
-  --input: 260 20% 20%;
-  --ring: 263 70% 55%;
-  
-  --chart-1: 263 70% 55%;
-  --chart-2: 43 96% 50%;
-  --chart-3: 180 40% 50%;
-  --chart-4: 330 50% 60%;
-  --chart-5: 20 80% 60%;
+  --input: 215 20% 22%;
+  --ring: 210 100% 55%;
+
+  --chart-1: 210 100% 55%;
+  --chart-2: 0 100% 71%;
+  --chart-3: 129 41% 51%;
+  --chart-4: 39 100% 50%;
+  --chart-5: 215 15% 65%;
 }
 
 @layer base {
