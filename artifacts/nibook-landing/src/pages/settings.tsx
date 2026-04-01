@@ -14,6 +14,7 @@ import {
 import {
   Palette, MessageSquare, Link2, CreditCard, HelpCircle, Save,
   Check, Phone, Building2, Smartphone, Wallet, ExternalLink,
+  Code2, FileText, Copy, Eye, EyeOff,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -52,6 +53,9 @@ export default function SettingsPage() {
   const [businessName, setBusinessName] = useState("Amina's Beauty Studio");
   const [businessPhone, setBusinessPhone] = useState("+254 700 123 456");
   const [businessEmail, setBusinessEmail] = useState("amina@example.com");
+  const [policyText, setPolicyText] = useState("Cancellations made less than 24 hours before your appointment are non-refundable. No-shows will be charged the full service fee. To reschedule, please contact us at least 4 hours in advance.");
+  const [showPolicy, setShowPolicy] = useState(true);
+  const [widgetTheme, setWidgetTheme] = useState<"light" | "dark">("light");
 
   const togglePayment = (id: string) => {
     setPayments(payments.map(p => p.id === id ? { ...p, enabled: !p.enabled } : p));
@@ -85,6 +89,8 @@ export default function SettingsPage() {
           <TabsTrigger value="theme" className="gap-1.5 text-xs sm:text-sm"><Palette className="w-3.5 h-3.5" />Theme</TabsTrigger>
           <TabsTrigger value="payments" className="gap-1.5 text-xs sm:text-sm"><CreditCard className="w-3.5 h-3.5" />Payments</TabsTrigger>
           <TabsTrigger value="whatsapp" className="gap-1.5 text-xs sm:text-sm"><MessageSquare className="w-3.5 h-3.5" />WhatsApp</TabsTrigger>
+          <TabsTrigger value="policy" className="gap-1.5 text-xs sm:text-sm"><FileText className="w-3.5 h-3.5" />Policy</TabsTrigger>
+          <TabsTrigger value="widget" className="gap-1.5 text-xs sm:text-sm"><Code2 className="w-3.5 h-3.5" />Widget</TabsTrigger>
           <TabsTrigger value="connections" className="gap-1.5 text-xs sm:text-sm"><Link2 className="w-3.5 h-3.5" />Connections</TabsTrigger>
           <TabsTrigger value="support" className="gap-1.5 text-xs sm:text-sm"><HelpCircle className="w-3.5 h-3.5" />Support</TabsTrigger>
         </TabsList>
@@ -253,6 +259,137 @@ export default function SettingsPage() {
                     <p className="font-medium mb-1">✅ What clients will receive:</p>
                     <p className="text-green-700">Booking confirmation + reminder {reminderHours}h before their appointment with your business name, service, date, and time.</p>
                   </div>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </TabsContent>
+
+        {/* ── Cancellation Policy ── */}
+        <TabsContent value="policy">
+          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+            <Card className="shadow-sm">
+              <CardHeader>
+                <CardTitle>Cancellation Policy</CardTitle>
+                <CardDescription>Write your cancellation terms. Clients will see this on your booking page before confirming.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="flex items-center justify-between p-4 bg-muted/40 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    {showPolicy ? <Eye className="w-4 h-4 text-primary" /> : <EyeOff className="w-4 h-4 text-muted-foreground" />}
+                    <div>
+                      <p className="font-medium text-sm">Show policy on booking page</p>
+                      <p className="text-xs text-muted-foreground">Clients must acknowledge it before booking</p>
+                    </div>
+                  </div>
+                  <Switch checked={showPolicy} onCheckedChange={v => { setShowPolicy(v); setHasChanges(true); }} />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Policy text</Label>
+                  <textarea
+                    className="w-full min-h-[140px] rounded-lg border border-input bg-muted/20 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+                    value={policyText}
+                    onChange={e => { setPolicyText(e.target.value); setHasChanges(true); }}
+                  />
+                  <p className="text-xs text-muted-foreground">{policyText.length} characters</p>
+                </div>
+
+                {showPolicy && (
+                  <div className="space-y-2">
+                    <Label className="text-sm text-muted-foreground">Preview — how clients see it</Label>
+                    <div className="p-4 border border-amber-200 bg-amber-50 rounded-xl">
+                      <div className="flex items-start gap-2 mb-2">
+                        <FileText className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                        <p className="text-sm font-semibold text-amber-900">Cancellation Policy</p>
+                      </div>
+                      <p className="text-sm text-amber-800 leading-relaxed">{policyText || <span className="italic opacity-50">No policy text yet.</span>}</p>
+                      <div className="mt-3 flex items-center gap-2">
+                        <input type="checkbox" id="policy-preview-check" className="w-4 h-4 accent-amber-600" readOnly />
+                        <label htmlFor="policy-preview-check" className="text-xs text-amber-700">I have read and agree to the cancellation policy</label>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        </TabsContent>
+
+        {/* ── Embeddable Widget ── */}
+        <TabsContent value="widget">
+          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+            <Card className="shadow-sm">
+              <CardHeader>
+                <CardTitle>Booking Widget</CardTitle>
+                <CardDescription>Embed your booking page on any website by pasting a script tag into your HTML.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="flex items-center gap-3 p-3 bg-primary/5 border border-primary/20 rounded-xl text-sm text-primary">
+                  <Code2 className="w-4 h-4 shrink-0" />
+                  <span>Copy the snippet below and paste it anywhere in your website's <strong>&lt;body&gt;</strong> tag.</span>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Theme</Label>
+                    <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
+                      {(["light", "dark"] as const).map(t => (
+                        <button
+                          key={t}
+                          onClick={() => { setWidgetTheme(t); setHasChanges(true); }}
+                          className={`px-3 py-1 rounded-md text-xs font-medium transition-all capitalize ${widgetTheme === t ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                        >
+                          {t}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Embed snippet</Label>
+                  <div className="relative group">
+                    <pre className="bg-slate-900 text-green-400 rounded-xl p-4 text-xs overflow-x-auto leading-relaxed font-mono">
+{`<!-- Nibook Booking Widget -->
+<script
+  src="https://nibook.com/widget.js"
+  data-business="aminas-beauty-studio"
+  data-theme="${widgetTheme}"
+  data-primary="#0066CC"
+  async
+></script>
+<div id="nibook-widget"></div>`}
+                    </pre>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(`<!-- Nibook Booking Widget -->\n<script\n  src="https://nibook.com/widget.js"\n  data-business="aminas-beauty-studio"\n  data-theme="${widgetTheme}"\n  data-primary="#0066CC"\n  async\n></script>\n<div id="nibook-widget"></div>`);
+                        toast({ title: "Copied!", description: "Widget code copied to clipboard." });
+                      }}
+                      className="absolute top-2.5 right-2.5 flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white text-xs px-2.5 py-1.5 rounded-lg transition-colors"
+                    >
+                      <Copy className="w-3 h-3" />Copy
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+                  {[
+                    { label: "Business slug", value: "aminas-beauty-studio" },
+                    { label: "Widget version", value: "v2.1.0" },
+                    { label: "Status", value: "Active" },
+                  ].map(item => (
+                    <div key={item.label} className="p-3 bg-muted/40 rounded-lg">
+                      <p className="text-xs text-muted-foreground mb-1">{item.label}</p>
+                      <p className="font-medium text-sm">{item.value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <Separator />
+                <div className="flex items-start gap-3 text-sm text-muted-foreground">
+                  <Code2 className="w-4 h-4 shrink-0 mt-0.5" />
+                  <p>The widget is fully responsive and inherits your booking page theme. Advanced customization (position, z-index, trigger button) is available on Pro.</p>
                 </div>
               </CardContent>
             </Card>
