@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-type Status = "Confirmed" | "Pending" | "Completed" | "Cancelled";
+type Status = "Confirmed" | "Pending" | "Completed" | "Cancelled" | "No-Show";
 type Booking = {
   id: string;
   client: string;
@@ -61,13 +61,14 @@ const statusConfig: Record<Status, string> = {
   Completed: "bg-green-100 text-green-700 border-green-200 hover:bg-green-200",
   Cancelled: "bg-red-100 text-red-700 border-red-200 hover:bg-red-200",
   Pending:   "bg-yellow-100 text-yellow-700 border-yellow-200 hover:bg-yellow-200",
+  "No-Show": "bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200",
 };
 
 function StatusBadge({ status }: { status: Status }) {
   return <Badge className={`${statusConfig[status]} shadow-none`}>{status}</Badge>;
 }
 
-type ModalType = "details" | "message" | "reschedule" | "cancel" | "add" | null;
+type ModalType = "details" | "message" | "reschedule" | "cancel" | "add" | "mark" | null;
 
 export default function BookingsPage() {
   const { toast } = useToast();
@@ -105,6 +106,15 @@ export default function BookingsPage() {
   };
 
   const closeModal = () => { setModal(null); setSelected(null); };
+
+  const markBooking = (id: string, newStatus: "Completed" | "No-Show") => {
+    const booking = bookings.find(b => b.id === id);
+    setBookings(bookings.map(b => b.id === id ? { ...b, status: newStatus } : b));
+    toast({
+      title: newStatus === "Completed" ? "Marked as completed" : "Marked as no-show",
+      description: `${booking?.client}'s booking has been updated.`,
+    });
+  };
 
   const handleCancel = () => {
     if (!selected) return;
@@ -276,11 +286,18 @@ export default function BookingsPage() {
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-44">
+                      <DropdownMenuContent align="end" className="w-48">
                         <DropdownMenuItem onClick={() => openModal("details", booking)}>View Details</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => openModal("message", booking)}>Message Client</DropdownMenuItem>
                         {(booking.status === "Pending" || booking.status === "Confirmed") && (
                           <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => markBooking(booking.id, "Completed")}>
+                              ✅ Mark as Completed
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => markBooking(booking.id, "No-Show")}>
+                              🚫 Mark as No-Show
+                            </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => openModal("reschedule", booking)}>Reschedule</DropdownMenuItem>
                             <DropdownMenuItem
@@ -351,11 +368,18 @@ export default function BookingsPage() {
                       <MoreHorizontal className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-44">
+                  <DropdownMenuContent align="end" className="w-48">
                     <DropdownMenuItem onClick={() => openModal("details", booking)}>View Details</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => openModal("message", booking)}>Message Client</DropdownMenuItem>
                     {(booking.status === "Pending" || booking.status === "Confirmed") && (
                       <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => markBooking(booking.id, "Completed")}>
+                          ✅ Mark as Completed
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => markBooking(booking.id, "No-Show")}>
+                          🚫 Mark as No-Show
+                        </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={() => openModal("reschedule", booking)}>Reschedule</DropdownMenuItem>
                         <DropdownMenuItem

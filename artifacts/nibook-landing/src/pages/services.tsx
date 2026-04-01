@@ -15,14 +15,18 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 import {
   Plus, MoreHorizontal, Clock, DollarSign, Image as ImageIcon,
-  AlertCircle, Upload, X, ChevronLeft, ChevronRight,
+  AlertCircle, Upload, X, ChevronLeft, ChevronRight, ListChecks, Trash2,
 } from "lucide-react";
 import { useState, useRef, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 
 const MAX_IMAGES = 2;
+
+type FieldType = "text" | "number" | "checkbox" | "select";
+type IntakeField = { id: number; label: string; type: FieldType; required: boolean; options: string };
 
 type Service = {
   id: number;
@@ -32,6 +36,7 @@ type Service = {
   active: boolean;
   color: string;
   images: string[];
+  intakeFields: IntakeField[];
 };
 
 const gradients = [
@@ -44,9 +49,9 @@ const gradients = [
 ];
 
 const initialServices: Service[] = [
-  { id: 1, name: "Hair Braiding", price: "2,500", duration: 120, active: true, color: gradients[0], images: [] },
-  { id: 2, name: "Beard Trim & Shape", price: "800", duration: 30, active: true, color: gradients[1], images: [] },
-  { id: 3, name: "Locs Retwist", price: "3,500", duration: 180, active: false, color: gradients[2], images: [] },
+  { id: 1, name: "Hair Braiding", price: "2,500", duration: 120, active: true, color: gradients[0], images: [], intakeFields: [{ id: 1, label: "Hair length", type: "select", required: true, options: "Short,Medium,Long,Very Long" }, { id: 2, label: "Any allergies?", type: "text", required: false, options: "" }] },
+  { id: 2, name: "Beard Trim & Shape", price: "800", duration: 30, active: true, color: gradients[1], images: [], intakeFields: [] },
+  { id: 3, name: "Locs Retwist", price: "3,500", duration: 180, active: false, color: gradients[2], images: [], intakeFields: [] },
 ];
 
 const MAX_FREE_SERVICES = 3;
@@ -241,6 +246,85 @@ function ImageUploadArea({
   );
 }
 
+/* ── Intake fields editor ── */
+const FIELD_TYPES: { value: FieldType; label: string }[] = [
+  { value: "text", label: "Text answer" },
+  { value: "number", label: "Number" },
+  { value: "checkbox", label: "Yes / No checkbox" },
+  { value: "select", label: "Multiple choice" },
+];
+
+function IntakeFieldsEditor({ fields, onChange }: { fields: IntakeField[]; onChange: (f: IntakeField[]) => void }) {
+  const [newLabel, setNewLabel] = useState("");
+  const [newType, setNewType] = useState<FieldType>("text");
+  const [newRequired, setNewRequired] = useState(false);
+  const [newOptions, setNewOptions] = useState("");
+  const [addError, setAddError] = useState("");
+
+  const addField = () => {
+    if (!newLabel.trim()) { setAddError("Question text is required."); return; }
+    if (newType === "select" && !newOptions.trim()) { setAddError("Add at least one option (comma-separated)."); return; }
+    setAddError("");
+    onChange([...fields, { id: Date.now(), label: newLabel.trim(), type: newType, required: newRequired, options: newOptions.trim() }]);
+    setNewLabel("");
+    setNewType("text");
+    setNewRequired(false);
+    setNewOptions("");
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <ListChecks className="w-4 h-4 text-primary" />
+        <Label className="text-sm font-medium">Client intake questions</Label>
+        <span className="text-xs text-muted-foreground ml-auto">{fields.length} question{fields.length !== 1 ? "s" : ""}</span>
+      </div>
+
+      {fields.length > 0 && (
+        <div className="space-y-2">
+          {fields.map((f, i) => (
+            <div key={f.id} className="flex items-start gap-2 p-2.5 bg-muted/40 rounded-lg border border-border/50">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{f.label}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {FIELD_TYPES.find(t => t.value === f.type)?.label}
+                  {f.type === "select" && f.options && ` · ${f.options}`}
+                  {f.required && <span className="ml-1.5 text-red-500">Required</span>}
+                </p>
+              </div>
+              <button onClick={() => onChange(fields.filter((_, idx) => idx !== i))} className="text-muted-foreground hover:text-destructive transition-colors mt-0.5">
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="p-3 bg-muted/30 rounded-xl border border-border/50 space-y-2.5">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Add a question</p>
+        <Input placeholder="e.g. What's your hair length?" value={newLabel} onChange={e => { setNewLabel(e.target.value); setAddError(""); }} className="h-8 text-sm" />
+        <div className="grid grid-cols-2 gap-2">
+          <Select value={newType} onValueChange={v => setNewType(v as FieldType)}>
+            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {FIELD_TYPES.map(t => <SelectItem key={t.value} value={t.value} className="text-xs">{t.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <div className="flex items-center gap-2 px-2 bg-background border rounded-md h-8">
+            <Switch checked={newRequired} onCheckedChange={setNewRequired} className="scale-75" />
+            <span className="text-xs text-muted-foreground">Required</span>
+          </div>
+        </div>
+        {newType === "select" && (
+          <Input placeholder="Options: Short, Medium, Long" value={newOptions} onChange={e => setNewOptions(e.target.value)} className="h-8 text-xs" />
+        )}
+        {addError && <p className="text-xs text-destructive flex items-center gap-1"><AlertCircle className="w-3 h-3" />{addError}</p>}
+        <Button size="sm" onClick={addField} className="w-full h-8 text-xs gap-1.5"><Plus className="w-3.5 h-3.5" />Add Question</Button>
+      </div>
+    </div>
+  );
+}
+
 /* ── Main page ── */
 export default function ServicesPage() {
   const { toast } = useToast();
@@ -249,6 +333,7 @@ export default function ServicesPage() {
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [form, setForm] = useState({ name: "", price: "", duration: "60" });
   const [formImages, setFormImages] = useState<string[]>([]);
+  const [formIntakeFields, setFormIntakeFields] = useState<IntakeField[]>([]);
   const [formError, setFormError] = useState("");
 
   const openAdd = () => {
@@ -259,6 +344,7 @@ export default function ServicesPage() {
     setEditingService(null);
     setForm({ name: "", price: "", duration: "60" });
     setFormImages([]);
+    setFormIntakeFields([]);
     setFormError("");
     setDialogOpen(true);
   };
@@ -267,6 +353,7 @@ export default function ServicesPage() {
     setEditingService(service);
     setForm({ name: service.name, price: service.price.replace(/,/g, ""), duration: String(service.duration) });
     setFormImages(service.images);
+    setFormIntakeFields(service.intakeFields);
     setFormError("");
     setDialogOpen(true);
   };
@@ -280,7 +367,7 @@ export default function ServicesPage() {
     if (editingService) {
       setServices(services.map(s =>
         s.id === editingService.id
-          ? { ...s, name: form.name, price: priceFormatted, duration: Number(form.duration), images: formImages }
+          ? { ...s, name: form.name, price: priceFormatted, duration: Number(form.duration), images: formImages, intakeFields: formIntakeFields }
           : s
       ));
       toast({ title: "Service updated", description: `"${form.name}" has been updated.` });
@@ -293,6 +380,7 @@ export default function ServicesPage() {
         active: true,
         color: gradients[services.length % gradients.length],
         images: formImages,
+        intakeFields: formIntakeFields,
       };
       setServices([...services, newService]);
       toast({ title: "Service added", description: `"${form.name}" is now live on your booking page.` });
@@ -495,6 +583,11 @@ export default function ServicesPage() {
                 <AlertCircle className="w-4 h-4 shrink-0" /> {formError}
               </p>
             )}
+
+            <Separator />
+
+            {/* Intake fields */}
+            <IntakeFieldsEditor fields={formIntakeFields} onChange={setFormIntakeFields} />
           </div>
 
           <DialogFooter>
