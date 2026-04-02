@@ -7,8 +7,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Separator } from "@/components/ui/separator";
 import {
   ArrowUpRight, TrendingUp, Scissors, CalendarCheck, Clock, MessageSquare,
-  Plus, ExternalLink, Calendar as CalendarIcon, Copy, Check, X,
+  Plus, ExternalLink, Calendar as CalendarIcon, Copy, Check,
   Smartphone, Star, Zap, BarChart3, Users, AlertTriangle,
+  Link2, Share2, QrCode, Eye, MousePointerClick,
 } from "lucide-react";
 import { useState } from "react";
 import { useLocation } from "wouter";
@@ -395,39 +396,106 @@ export default function DashboardHome() {
 
       {/* ── Booking page modal ── */}
       <Dialog open={showBookingPage} onOpenChange={setShowBookingPage}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Your Public Booking Page</DialogTitle>
-            <DialogDescription>Share this link with clients so they can book appointments directly.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 p-3 bg-muted/50 border rounded-xl">
-              <ExternalLink className="w-4 h-4 text-muted-foreground shrink-0" />
-              <span className="text-sm font-mono truncate flex-1 text-primary">{bookingPageUrl}</span>
-              <Button size="sm" variant="ghost" className="shrink-0 gap-1.5 h-8" onClick={copyUrl}>
-                {copied ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
-                {copied ? "Copied!" : "Copy"}
-              </Button>
+        <DialogContent className="sm:max-w-lg p-0 overflow-hidden gap-0">
+          {/* Hero banner */}
+          <div className="relative bg-gradient-to-br from-primary to-blue-700 px-6 pt-8 pb-14 text-white overflow-hidden">
+            <div className="absolute -top-8 -right-8 w-32 h-32 bg-white/10 rounded-full blur-2xl pointer-events-none" />
+            <div className="absolute bottom-0 left-0 right-0 h-8 bg-background rounded-t-3xl" />
+            <div className="relative z-10">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
+                  <Link2 className="w-4 h-4" />
+                </div>
+                <span className="text-sm font-semibold text-white/80 uppercase tracking-wider">Booking Page</span>
+              </div>
+              <h2 className="text-2xl font-bold mb-1">Amina's Beauty Studio</h2>
+              <p className="text-white/70 text-sm">Your public booking page is live and accepting appointments</p>
             </div>
-            <div className="grid grid-cols-3 gap-2 text-center">
+          </div>
+
+          <div className="px-6 pb-6 space-y-5">
+            {/* Stats row */}
+            <div className="grid grid-cols-3 gap-3 -mt-1">
               {[
-                { label: "Views this month", value: "142" },
-                { label: "Converted", value: "18" },
-                { label: "Rate", value: "12.7%" },
-              ].map(({ label, value }) => (
-                <div key={label} className="p-3 bg-muted/40 rounded-lg">
-                  <p className="font-bold text-lg">{value}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
+                { label: "Page views", value: "142", icon: Eye, color: "text-blue-600 bg-blue-50" },
+                { label: "Bookings made", value: "18", icon: MousePointerClick, color: "text-green-600 bg-green-50" },
+                { label: "Conv. rate", value: "12.7%", icon: TrendingUp, color: "text-purple-600 bg-purple-50" },
+              ].map(({ label, value, icon: Icon, color }) => (
+                <div key={label} className="p-3.5 bg-muted/40 border border-border/50 rounded-2xl text-center">
+                  <div className={`w-8 h-8 rounded-full ${color} flex items-center justify-center mx-auto mb-2`}>
+                    <Icon className="w-3.5 h-3.5" />
+                  </div>
+                  <p className="font-bold text-xl leading-none">{value}</p>
+                  <p className="text-xs text-muted-foreground mt-1.5 leading-tight">{label}</p>
                 </div>
               ))}
             </div>
-          </div>
-          <DialogFooter>
-            <Button className="w-full gap-2" onClick={copyUrl}>
-              <Copy className="w-4 h-4" />
-              Copy Booking Link
+
+            {/* URL field */}
+            <div className="space-y-1.5">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Your booking link</p>
+              <div className="flex items-center gap-0 border border-border rounded-xl overflow-hidden bg-muted/30">
+                <div className="flex items-center gap-2.5 px-3 py-3 flex-1 min-w-0">
+                  <ExternalLink className="w-4 h-4 text-primary shrink-0" />
+                  <span className="text-sm font-mono text-foreground truncate">{bookingPageUrl}</span>
+                </div>
+                <button
+                  onClick={copyUrl}
+                  className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold shrink-0 border-l border-border transition-all ${
+                    copied
+                      ? "bg-green-50 text-green-600"
+                      : "bg-background hover:bg-muted text-foreground"
+                  }`}
+                >
+                  {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  {copied ? "Copied!" : "Copy"}
+                </button>
+              </div>
+            </div>
+
+            {/* Share options */}
+            <div className="space-y-1.5">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Share via</p>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  onClick={() => { window.open(`https://wa.me/?text=Book an appointment with Amina's Beauty Studio: ${bookingPageUrl}`, "_blank"); }}
+                  className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-border bg-muted/30 hover:bg-green-50 hover:border-green-200 transition-all group"
+                >
+                  <div className="w-9 h-9 bg-green-500 rounded-full flex items-center justify-center">
+                    <MessageSquare className="w-4 h-4 text-white" />
+                  </div>
+                  <span className="text-xs font-medium group-hover:text-green-700">WhatsApp</span>
+                </button>
+                <button
+                  onClick={copyUrl}
+                  className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-border bg-muted/30 hover:bg-primary/5 hover:border-primary/30 transition-all group"
+                >
+                  <div className="w-9 h-9 bg-primary rounded-full flex items-center justify-center">
+                    <Share2 className="w-4 h-4 text-white" />
+                  </div>
+                  <span className="text-xs font-medium group-hover:text-primary">Copy Link</span>
+                </button>
+                <button
+                  onClick={() => toast({ title: "QR Code", description: "QR code download available on Pro." })}
+                  className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-border bg-muted/30 hover:bg-slate-100 hover:border-slate-300 transition-all group"
+                >
+                  <div className="w-9 h-9 bg-slate-700 rounded-full flex items-center justify-center">
+                    <QrCode className="w-4 h-4 text-white" />
+                  </div>
+                  <span className="text-xs font-medium group-hover:text-slate-700">QR Code</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Open page button */}
+            <Button
+              className="w-full gap-2 h-11 text-sm font-semibold"
+              onClick={() => { window.open(bookingPageUrl, "_blank"); setShowBookingPage(false); }}
+            >
+              <ExternalLink className="w-4 h-4" />
+              Open Booking Page
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 
