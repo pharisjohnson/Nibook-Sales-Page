@@ -3,15 +3,37 @@ import { Router, type IRouter, type Request, type Response } from "express";
 const router: IRouter = Router();
 
 const PAYHERO_BASE = "https://backend.payhero.co.ke/api/v2";
-const AUTH_TOKEN = process.env.PAYHERO_AUTH_TOKEN ?? "";
 const CHANNEL_ID = Number(process.env.PAYHERO_CHANNEL_ID ?? "0");
+
+function buildAuthHeader(): string {
+  const u = process.env.PAYHERO_USERNAME ?? "";
+  const p = process.env.PAYHERO_PASSWORD ?? "";
+  const t = process.env.PAYHERO_AUTH_TOKEN ?? "";
+
+  // Case 1: PAYHERO_USERNAME already contains the full "Basic <token>" header
+  if (u.startsWith("Basic ")) return u;
+
+  // Case 2: PAYHERO_AUTH_TOKEN is the username, PAYHERO_PASSWORD is the password
+  if (t && p && !t.startsWith("Basic") && !t.includes(" ")) {
+    return "Basic " + Buffer.from(`${t}:${p}`).toString("base64");
+  }
+
+  // Case 3: PAYHERO_USERNAME + PAYHERO_PASSWORD are clean credentials
+  if (u && p && !u.includes(" ")) {
+    return "Basic " + Buffer.from(`${u}:${p}`).toString("base64");
+  }
+
+  // Case 4: PAYHERO_AUTH_TOKEN is the full token
+  if (t.startsWith("Basic ")) return t;
+  if (t) return `Basic ${t}`;
+
+  return "";
+}
 
 function payheroHeaders() {
   return {
     "Content-Type": "application/json",
-    Authorization: AUTH_TOKEN.startsWith("Basic ")
-      ? AUTH_TOKEN
-      : `Basic ${AUTH_TOKEN}`,
+    Authorization: buildAuthHeader(),
   };
 }
 
@@ -36,7 +58,7 @@ router.post("/payments/initiate", async (req: Request, res: Response) => {
     return;
   }
 
-  if (!AUTH_TOKEN) {
+  if (!buildAuthHeader()) {
     res.status(500).json({ success: false, message: "PayHero credentials not configured" });
     return;
   }
