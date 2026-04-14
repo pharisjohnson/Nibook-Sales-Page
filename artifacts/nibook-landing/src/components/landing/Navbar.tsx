@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { Calendar, Menu, X } from "lucide-react";
+import { Calendar, Menu, X, Map } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export function Navbar() {
@@ -20,6 +20,7 @@ export function Navbar() {
     { name: "How It Works", href: "#how-it-works" },
     { name: "Pricing", href: "#pricing" },
     { name: "Testimonials", href: "#testimonials" },
+    { name: "Directory", href: "/directory" },
   ];
 
   const handleAuthClick = (type: string) => {
@@ -48,15 +49,20 @@ export function Navbar() {
 
         {/* Desktop Nav */}
         <div className="hidden md:flex items-center gap-8">
-          {navLinks.map((link) => (
-            <a
-              key={link.name}
-              href={link.href}
-              className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors"
-            >
-              {link.name}
-            </a>
-          ))}
+          {navLinks.map((link) =>
+            link.href.startsWith("/") ? (
+              <Link key={link.name} href={link.href}>
+                <span className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors flex items-center gap-1.5 cursor-pointer">
+                  {link.name === "Directory" && <Map className="w-3.5 h-3.5" />}
+                  {link.name}
+                </span>
+              </Link>
+            ) : (
+              <a key={link.name} href={link.href} className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">
+                {link.name}
+              </a>
+            )
+          )}
         </div>
 
         {/* Desktop Actions */}
@@ -87,16 +93,28 @@ export function Navbar() {
       {/* Mobile Menu */}
       {mobileMenuOpen && (
         <div className="md:hidden absolute top-full left-0 right-0 bg-white border-b border-border shadow-xl p-4 flex flex-col gap-4 animate-in slide-in-from-top-2">
-          {navLinks.map((link) => (
-            <a
-              key={link.name}
-              href={link.href}
-              onClick={() => setMobileMenuOpen(false)}
-              className="text-base font-medium text-foreground p-2 hover:bg-muted rounded-lg"
-            >
-              {link.name}
-            </a>
-          ))}
+          {navLinks.map((link) =>
+            link.href.startsWith("/") ? (
+              <Link key={link.name} href={link.href}>
+                <span
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="text-base font-medium text-foreground p-2 hover:bg-muted rounded-lg flex items-center gap-2 cursor-pointer"
+                >
+                  {link.name === "Directory" && <Map className="w-4 h-4 text-primary" />}
+                  {link.name}
+                </span>
+              </Link>
+            ) : (
+              <a
+                key={link.name}
+                href={link.href}
+                onClick={() => setMobileMenuOpen(false)}
+                className="text-base font-medium text-foreground p-2 hover:bg-muted rounded-lg"
+              >
+                {link.name}
+              </a>
+            )
+          )}
           <div className="h-px bg-border my-2" />
           <div className="flex flex-col gap-3">
             <button 

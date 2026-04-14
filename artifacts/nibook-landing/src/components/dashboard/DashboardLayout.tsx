@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, Scissors, CalendarDays, Clock, Users, Settings, Calendar, Menu, X } from "lucide-react";
+import { LayoutDashboard, Scissors, CalendarDays, Clock, Users, Settings, Calendar, Menu, BarChart3 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 
 const navLinks = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Analytics", href: "/analytics", icon: BarChart3 },
   { name: "Services", href: "/services", icon: Scissors },
   { name: "Bookings", href: "/bookings", icon: CalendarDays },
   { name: "Availability", href: "/availability", icon: Clock },
@@ -23,7 +24,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen bg-muted/30 flex">
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/50 z-40 md:hidden"
           onClick={() => setSidebarOpen(false)}
         />
@@ -51,7 +52,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
 
         {/* Nav Links */}
-        <div className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
+        <div className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
           {navLinks.map((link) => {
             const isActive = location === link.href;
             const Icon = link.icon;
@@ -60,13 +61,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <span
                   className={cn(
                     "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer",
-                    isActive 
-                      ? "bg-primary text-primary-foreground shadow-sm" 
+                    isActive
+                      ? "bg-primary text-primary-foreground shadow-sm"
                       : "text-muted-foreground hover:bg-muted hover:text-foreground"
                   )}
                   onClick={() => setSidebarOpen(false)}
                 >
-                  <Icon className="w-5 h-5" />
+                  <Icon className="w-5 h-5 shrink-0" />
                   {link.name}
                 </span>
               </Link>
@@ -79,9 +80,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="bg-muted rounded-xl p-4 flex flex-col items-center text-center space-y-3">
             <Badge variant="outline" className="bg-background">Free Plan</Badge>
             <p className="text-xs text-muted-foreground">Get more features with Pro.</p>
-            <Button className="w-full" size="sm">Upgrade to Pro</Button>
+            <Link href="/#pricing">
+              <Button className="w-full" size="sm">Upgrade to Pro</Button>
+            </Link>
           </div>
-          
+
           <div className="flex items-center gap-3 px-2">
             <Avatar>
               <AvatarImage src="https://i.pravatar.cc/150?u=amina" />
@@ -105,7 +108,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
             <span className="font-bold text-lg">Nibook</span>
           </div>
-          <button 
+          <button
             onClick={() => setSidebarOpen(true)}
             className="p-2 -mr-2 text-muted-foreground hover:text-foreground"
           >

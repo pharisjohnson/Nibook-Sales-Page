@@ -5,6 +5,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
+import DirectoryPage from "@/pages/directory";
+import BookingStorePage from "@/pages/booking-store";
 
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import DashboardHome from "@/pages/dashboard";
@@ -13,6 +15,7 @@ import BookingsPage from "@/pages/bookings";
 import AvailabilityPage from "@/pages/availability";
 import TeamPage from "@/pages/team";
 import SettingsPage from "@/pages/settings";
+import AnalyticsPage from "@/pages/analytics";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -27,25 +30,27 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
-      
+      <Route path="/directory" component={DirectoryPage} />
+      <Route path="/book/:slug" component={BookingStorePage} />
+
       <Route path="/dashboard">
         <DashboardLayout>
           <DashboardHome />
         </DashboardLayout>
       </Route>
-      
+
       <Route path="/services">
         <DashboardLayout>
           <ServicesPage />
         </DashboardLayout>
       </Route>
-      
+
       <Route path="/bookings">
         <DashboardLayout>
           <BookingsPage />
         </DashboardLayout>
       </Route>
-      
+
       <Route path="/availability">
         <DashboardLayout>
           <AvailabilityPage />
@@ -61,6 +66,12 @@ function Router() {
       <Route path="/settings">
         <DashboardLayout>
           <SettingsPage />
+        </DashboardLayout>
+      </Route>
+
+      <Route path="/analytics">
+        <DashboardLayout>
+          <AnalyticsPage />
         </DashboardLayout>
       </Route>
 
