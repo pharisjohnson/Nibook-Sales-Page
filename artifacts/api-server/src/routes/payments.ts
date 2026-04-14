@@ -1,4 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
+import { getSupabaseAdmin } from "../lib/supabase.js";
 
 const router: IRouter = Router();
 
@@ -10,23 +11,15 @@ function buildAuthHeader(): string {
   const p = process.env.PAYHERO_PASSWORD ?? "";
   const t = process.env.PAYHERO_AUTH_TOKEN ?? "";
 
-  // Case 1: PAYHERO_USERNAME already contains the full "Basic <token>" header
   if (u.startsWith("Basic ")) return u;
-
-  // Case 2: PAYHERO_AUTH_TOKEN is the username, PAYHERO_PASSWORD is the password
   if (t && p && !t.startsWith("Basic") && !t.includes(" ")) {
     return "Basic " + Buffer.from(`${t}:${p}`).toString("base64");
   }
-
-  // Case 3: PAYHERO_USERNAME + PAYHERO_PASSWORD are clean credentials
   if (u && p && !u.includes(" ")) {
     return "Basic " + Buffer.from(`${u}:${p}`).toString("base64");
   }
-
-  // Case 4: PAYHERO_AUTH_TOKEN is the full token
   if (t.startsWith("Basic ")) return t;
   if (t) return `Basic ${t}`;
-
   return "";
 }
 
@@ -46,11 +39,12 @@ function normalizePhone(raw: string): string {
 }
 
 router.post("/payments/initiate", async (req: Request, res: Response) => {
-  const { phone, amount, plan, reference } = req.body as {
+  const { phone, amount, plan, reference, owner_id } = req.body as {
     phone?: string;
     amount?: number;
     plan?: string;
     reference?: string;
+    owner_id?: string;
   };
 
   if (!phone || !amount || !plan) {
@@ -75,6 +69,17 @@ router.post("/payments/initiate", async (req: Request, res: Response) => {
     process.env.PAYHERO_CALLBACK_URL ??
     `https://${process.env.REPLIT_DEV_DOMAIN ?? "localhost"}/api/payments/callback`;
 
+  // Save payment record in Supabase before initiating
+  const supabase = getSupabaseAdmin();
+  await supabase.from("payments").insert({
+    reference: externalRef,
+    phone: phoneNormalized,
+    amount,
+    plan,
+    owner_id: owner_id ?? null,
+    status: "pending",
+  });
+
   try {
     const payheroRes = await fetch(`${PAYHERO_BASE}/payments`, {
       method: "POST",
@@ -91,7 +96,11 @@ router.post("/payments/initiate", async (req: Request, res: Response) => {
 
     const data = (await payheroRes.json()) as Record<string, unknown>;
 
+    // Store PayHero response
+    await supabase.from("payments").update({ payhero_response: data }).eq("reference", externalRef);
+
     if (!payheroRes.ok) {
+      await supabase.from("payments").update({ status: "failed" }).eq("reference", externalRef);
       res.status(payheroRes.status).json({
         success: false,
         message: (data.message as string) ?? "PayHero request failed",
@@ -107,6 +116,7 @@ router.post("/payments/initiate", async (req: Request, res: Response) => {
       data,
     });
   } catch (err) {
+    await supabase.from("payments").update({ status: "failed" }).eq("reference", externalRef);
     res.status(502).json({ success: false, message: "Failed to reach PayHero", error: String(err) });
   }
 });
@@ -133,15 +143,41 @@ router.get("/payments/status/:reference", async (req: Request, res: Response) =>
     }
 
     const status = (data.status as string) ?? "PENDING";
+
+    // Update payment status in Supabase
+    const supabase = getSupabaseAdmin();
+    const normalizedStatus = status.toUpperCase();
+    if (["SUCCESS", "COMPLETE", "COMPLETED"].includes(normalizedStatus)) {
+      await supabase.from("payments").update({ status: "success", updated_at: new Date().toISOString() }).eq("reference", reference);
+    } else if (["FAILED", "CANCELLED", "CANCELED"].includes(normalizedStatus)) {
+      await supabase.from("payments").update({ status: "failed", updated_at: new Date().toISOString() }).eq("reference", reference);
+    }
+
     res.json({ success: true, status, data });
   } catch (err) {
     res.status(502).json({ success: false, message: "Failed to reach PayHero", error: String(err) });
   }
 });
 
-router.post("/payments/callback", (req: Request, res: Response) => {
+router.post("/payments/callback", async (req: Request, res: Response) => {
   const payload = req.body as Record<string, unknown>;
   console.log("[PayHero callback]", JSON.stringify(payload));
+
+  const reference = (payload.reference ?? payload.external_reference ?? payload.ExternalReference) as string | undefined;
+  const statusRaw = (payload.status ?? payload.Status ?? "") as string;
+
+  if (reference) {
+    const supabase = getSupabaseAdmin();
+    const normalizedStatus = statusRaw.toUpperCase();
+    let dbStatus = "pending";
+    if (["SUCCESS", "COMPLETE", "COMPLETED"].includes(normalizedStatus)) dbStatus = "success";
+    else if (["FAILED", "CANCELLED", "CANCELED"].includes(normalizedStatus)) dbStatus = "failed";
+
+    await supabase.from("payments")
+      .update({ status: dbStatus, callback_payload: payload, updated_at: new Date().toISOString() })
+      .eq("reference", reference);
+  }
+
   res.json({ received: true });
 });
 

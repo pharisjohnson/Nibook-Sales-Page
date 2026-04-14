@@ -1,9 +1,14 @@
 import { motion } from "framer-motion";
 import { ArrowRight, Star, TrendingUp, CalendarCheck, Users } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
+import { AuthModal } from "./AuthModal";
+import { useAuth } from "@/lib/auth";
+import { useLocation } from "wouter";
 
 export function Hero() {
-  const { toast } = useToast();
+  const { user } = useAuth();
+  const [, navigate] = useLocation();
+  const [showAuth, setShowAuth] = useState(false);
 
   return (
     <section className="relative pt-28 pb-16 lg:pt-36 lg:pb-24 overflow-hidden bg-[#F8FAFF]">
@@ -62,10 +67,10 @@ export function Hero() {
               className="mt-8 flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto"
             >
               <button
-                onClick={() => toast({ title: "Redirecting...", description: "Opening signup flow." })}
+                onClick={() => user ? navigate("/dashboard") : setShowAuth(true)}
                 className="w-full sm:w-auto px-7 py-3.5 rounded-full font-bold bg-primary text-white shadow-lg shadow-primary/30 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 flex items-center justify-center gap-2 group text-base"
               >
-                Start for Free
+                {user ? "Go to Dashboard" : "Start for Free"}
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </button>
               <button
@@ -202,6 +207,11 @@ export function Hero() {
           </motion.div>
         </div>
       </div>
+      <AuthModal
+        open={showAuth}
+        onClose={() => setShowAuth(false)}
+        defaultTab="signup"
+      />
     </section>
   );
 }
