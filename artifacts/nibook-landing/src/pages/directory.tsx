@@ -1,4 +1,4 @@
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useState, useMemo } from "react";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Search, MapPin, Star, Clock, Scissors, Sparkles, Dumbbell,
-  Heart, Camera, ChevronRight, SlidersHorizontal, X, ArrowLeft,
+  Heart, Camera, SlidersHorizontal, X, ArrowLeft, LayoutList, LayoutGrid, ImageIcon, ChevronRight,
 } from "lucide-react";
 
 const categories = [
@@ -22,59 +22,209 @@ const businesses = [
     id: 1, slug: "aminas-beauty-studio", name: "Amina's Beauty Studio",
     category: "hair", categoryLabel: "Hair & Beauty",
     location: "Westlands, Nairobi", distance: "1.2 km",
-    rating: 4.8, reviewCount: 127, priceFrom: 800, priceTo: 3500,
+    rating: 4.8, reviewCount: 127, priceFrom: 800,
     tags: ["Braiding", "Locs", "Beard Trim"],
     sponsored: true, available: true,
     gradient: "from-pink-500 to-rose-500",
+    featuredImage: null as string | null,
   },
   {
     id: 2, slug: "kings-barbershop", name: "King's Barbershop",
     category: "hair", categoryLabel: "Hair & Beauty",
     location: "CBD, Nairobi", distance: "2.5 km",
-    rating: 4.6, reviewCount: 89, priceFrom: 500, priceTo: 1500,
+    rating: 4.6, reviewCount: 89, priceFrom: 500,
     tags: ["Haircut", "Shave", "Fade"],
     sponsored: false, available: true,
     gradient: "from-blue-500 to-indigo-600",
+    featuredImage: null as string | null,
   },
   {
     id: 3, slug: "zen-wellness-spa", name: "Zen Wellness Spa",
     category: "wellness", categoryLabel: "Wellness & Spa",
     location: "Kilimani, Nairobi", distance: "3.1 km",
-    rating: 4.9, reviewCount: 203, priceFrom: 2000, priceTo: 8000,
+    rating: 4.9, reviewCount: 203, priceFrom: 2000,
     tags: ["Massage", "Facial", "Body Wrap"],
     sponsored: true, available: true,
     gradient: "from-emerald-500 to-teal-600",
+    featuredImage: null as string | null,
   },
   {
     id: 4, slug: "fit-nairobi", name: "FitNairobi Studio",
     category: "fitness", categoryLabel: "Fitness",
     location: "Lavington, Nairobi", distance: "4.0 km",
-    rating: 4.7, reviewCount: 156, priceFrom: 1200, priceTo: 3000,
+    rating: 4.7, reviewCount: 156, priceFrom: 1200,
     tags: ["Personal Training", "Yoga", "HIIT"],
     sponsored: false, available: false,
     gradient: "from-orange-500 to-red-500",
+    featuredImage: null as string | null,
   },
   {
     id: 5, slug: "frames-by-fiona", name: "Frames by Fiona",
     category: "photography", categoryLabel: "Photography",
     location: "Karen, Nairobi", distance: "8.2 km",
-    rating: 4.9, reviewCount: 74, priceFrom: 5000, priceTo: 25000,
+    rating: 4.9, reviewCount: 74, priceFrom: 5000,
     tags: ["Portraits", "Events", "Studio"],
     sponsored: true, available: true,
     gradient: "from-violet-500 to-purple-600",
+    featuredImage: null as string | null,
   },
   {
     id: 6, slug: "glow-up-beauty", name: "Glow Up Beauty Bar",
     category: "hair", categoryLabel: "Hair & Beauty",
     location: "Parklands, Nairobi", distance: "2.8 km",
-    rating: 4.5, reviewCount: 61, priceFrom: 1000, priceTo: 5000,
+    rating: 4.5, reviewCount: 61, priceFrom: 1000,
     tags: ["Nails", "Waxing", "Makeup"],
     sponsored: false, available: true,
     gradient: "from-amber-500 to-orange-500",
+    featuredImage: null as string | null,
+  },
+  {
+    id: 7, slug: "dr-nails-studio", name: "Dr. Nails Studio",
+    category: "hair", categoryLabel: "Hair & Beauty",
+    location: "Ngong Road, Nairobi", distance: "3.7 km",
+    rating: 4.7, reviewCount: 48, priceFrom: 600,
+    tags: ["Manicure", "Pedicure", "Gel Nails"],
+    sponsored: false, available: true,
+    gradient: "from-fuchsia-500 to-pink-600",
+    featuredImage: null as string | null,
+  },
+  {
+    id: 8, slug: "iron-republic-gym", name: "Iron Republic Gym",
+    category: "fitness", categoryLabel: "Fitness",
+    location: "Upperhill, Nairobi", distance: "5.4 km",
+    rating: 4.4, reviewCount: 93, priceFrom: 800,
+    tags: ["Gym", "Boxing", "Crossfit"],
+    sponsored: false, available: true,
+    gradient: "from-slate-600 to-gray-800",
+    featuredImage: null as string | null,
   },
 ];
 
 const sortOptions = ["Best Match", "Highest Rated", "Nearest", "Lowest Price", "Most Reviewed"];
+
+/* ── List-view card (horizontal, like the reference screenshot) ── */
+function ListCard({ biz }: { biz: typeof businesses[0] }) {
+  return (
+    <Link href={`/book/${biz.slug}`}>
+      <motion.div
+        layout
+        className="bg-white border border-border rounded-2xl overflow-hidden hover:shadow-md hover:border-primary/20 transition-all group cursor-pointer"
+      >
+        <div className="flex gap-4 p-4">
+          {/* Logo / avatar */}
+          <div className={`w-16 h-16 rounded-xl bg-gradient-to-br ${biz.gradient} flex items-center justify-center shrink-0 shadow-sm`}>
+            {biz.featuredImage
+              ? <img src={biz.featuredImage} className="w-full h-full object-cover rounded-xl" alt={biz.name} />
+              : <Scissors className="w-7 h-7 text-white" />}
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="font-semibold text-sm group-hover:text-primary transition-colors">{biz.name}</p>
+                {biz.sponsored && (
+                  <Badge className="text-[10px] px-1.5 py-0 bg-amber-100 text-amber-700 border-amber-200 shadow-none">Sponsored</Badge>
+                )}
+              </div>
+              <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0 group-hover:text-primary transition-colors" />
+            </div>
+
+            <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+              <MapPin className="w-3 h-3 shrink-0" />
+              <span>{biz.location}</span>
+              <span className="text-border">·</span>
+              <span>{biz.distance}</span>
+            </div>
+
+            <div className="flex items-center gap-3 mt-1.5 text-xs">
+              <div className="flex items-center gap-1">
+                <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                <span className="font-semibold">{biz.rating}</span>
+                <span className="text-muted-foreground">({biz.reviewCount})</span>
+              </div>
+              <div className={`flex items-center gap-1 font-medium ${biz.available ? "text-green-600" : "text-muted-foreground"}`}>
+                <Clock className="w-3 h-3" />
+                <span>{biz.available ? "Available today" : "Fully booked"}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between mt-2">
+              <div className="flex gap-1.5 flex-wrap">
+                {biz.tags.slice(0, 3).map(t => (
+                  <span key={t} className="text-[10px] px-2 py-0.5 bg-muted rounded-full text-muted-foreground">{t}</span>
+                ))}
+              </div>
+              <span className="text-xs font-semibold text-foreground">from KES {biz.priceFrom.toLocaleString()}</span>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </Link>
+  );
+}
+
+/* ── Card-view card (vertical, service-card style) ── */
+function GridCard({ biz }: { biz: typeof businesses[0] }) {
+  return (
+    <Link href={`/book/${biz.slug}`}>
+      <motion.div
+        layout
+        className="bg-white border border-border rounded-2xl overflow-hidden hover:shadow-lg hover:border-primary/20 hover:-translate-y-0.5 transition-all group cursor-pointer flex flex-col"
+      >
+        {/* Featured image / logo banner */}
+        <div className={`relative h-36 bg-gradient-to-br ${biz.gradient} flex items-center justify-center`}>
+          {biz.featuredImage
+            ? <img src={biz.featuredImage} alt={biz.name} className="w-full h-full object-cover absolute inset-0" />
+            : <ImageIcon className="w-10 h-10 text-white/40" />}
+
+          {/* Sponsored badge */}
+          {biz.sponsored && (
+            <span className="absolute top-2.5 left-2.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-400 text-amber-900">
+              Sponsored
+            </span>
+          )}
+
+          {/* Available pill */}
+          <span className={`absolute top-2.5 right-2.5 text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+            biz.available ? "bg-green-500 text-white" : "bg-gray-800/60 text-white"
+          }`}>
+            {biz.available ? "Available" : "Fully booked"}
+          </span>
+        </div>
+
+        {/* Card body */}
+        <div className="p-3 flex flex-col gap-2 flex-1">
+          <div>
+            <p className="font-bold text-sm leading-tight group-hover:text-primary transition-colors line-clamp-1">{biz.name}</p>
+            <div className="flex items-center gap-1 mt-0.5 text-xs text-muted-foreground">
+              <MapPin className="w-3 h-3 shrink-0" />
+              <span className="truncate">{biz.location}</span>
+              <span className="shrink-0">· {biz.distance}</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1 text-xs">
+            <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+            <span className="font-semibold">{biz.rating}</span>
+            <span className="text-muted-foreground">({biz.reviewCount})</span>
+          </div>
+
+          <div className="flex gap-1 flex-wrap">
+            {biz.tags.slice(0, 2).map(t => (
+              <span key={t} className="text-[10px] px-2 py-0.5 bg-muted rounded-full text-muted-foreground">{t}</span>
+            ))}
+          </div>
+        </div>
+
+        {/* Card footer */}
+        <div className="px-3 pb-3 flex items-center justify-between border-t border-border/50 pt-2">
+          <span className="text-xs text-muted-foreground">from <span className="font-bold text-foreground text-sm">KES {biz.priceFrom.toLocaleString()}</span></span>
+          <Button size="sm" className="h-7 text-xs px-3 rounded-lg">Book</Button>
+        </div>
+      </motion.div>
+    </Link>
+  );
+}
 
 export default function DirectoryPage() {
   const [search, setSearch] = useState("");
@@ -82,6 +232,7 @@ export default function DirectoryPage() {
   const [sortBy, setSortBy] = useState("Best Match");
   const [showFilters, setShowFilters] = useState(false);
   const [maxPrice, setMaxPrice] = useState(30000);
+  const [view, setView] = useState<"list" | "grid">("list");
 
   const filtered = useMemo(() => {
     let list = [...businesses];
@@ -95,21 +246,19 @@ export default function DirectoryPage() {
     }
     if (activeCategory !== "all") list = list.filter(b => b.category === activeCategory);
     list = list.filter(b => b.priceFrom <= maxPrice);
-
     if (sortBy === "Highest Rated") list.sort((a, b) => b.rating - a.rating);
     else if (sortBy === "Nearest") list.sort((a, b) => parseFloat(a.distance) - parseFloat(b.distance));
     else if (sortBy === "Lowest Price") list.sort((a, b) => a.priceFrom - b.priceFrom);
     else if (sortBy === "Most Reviewed") list.sort((a, b) => b.reviewCount - a.reviewCount);
     else list.sort((a, b) => (b.sponsored ? 1 : 0) - (a.sponsored ? 1 : 0) || b.rating - a.rating);
-
     return list;
   }, [search, activeCategory, sortBy, maxPrice]);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-[#F8FAFF]">
       {/* Hero header */}
       <div className="bg-gradient-to-br from-primary to-blue-700 pt-10 pb-16 px-4">
-        <div className="max-w-3xl mx-auto">
+        <div className="max-w-5xl mx-auto">
           <Link href="/">
             <button className="flex items-center gap-1.5 text-white/70 hover:text-white text-sm mb-6 transition-colors">
               <ArrowLeft className="w-4 h-4" />Back to Nibook
@@ -119,7 +268,7 @@ export default function DirectoryPage() {
           <p className="text-white/70 text-sm mb-6">Book verified professionals in Nairobi and beyond</p>
 
           <div className="relative">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-muted-foreground" />
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
               className="pl-10 h-12 rounded-xl bg-white border-0 shadow-lg text-foreground placeholder:text-muted-foreground"
               placeholder="Search by name, service, or location..."
@@ -135,7 +284,7 @@ export default function DirectoryPage() {
         </div>
       </div>
 
-      <div className="max-w-3xl mx-auto px-4 -mt-6">
+      <div className="max-w-5xl mx-auto px-4 -mt-6">
         {/* Category chips */}
         <div className="flex gap-2 overflow-x-auto pb-2 mb-4 scrollbar-hide">
           {categories.map(({ id, label, icon: Icon }) => (
@@ -153,11 +302,12 @@ export default function DirectoryPage() {
           ))}
         </div>
 
-        {/* Sort + filter row */}
-        <div className="flex items-center justify-between mb-5 gap-3">
+        {/* Controls row */}
+        <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
           <p className="text-sm text-muted-foreground">
             <span className="font-semibold text-foreground">{filtered.length}</span> businesses found
           </p>
+
           <div className="flex items-center gap-2">
             <select
               value={sortBy}
@@ -166,111 +316,102 @@ export default function DirectoryPage() {
             >
               {sortOptions.map(o => <option key={o} value={o}>{o}</option>)}
             </select>
+
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className={`flex items-center gap-1.5 text-xs border rounded-lg px-3 py-2 transition-colors ${showFilters ? "bg-primary text-white border-primary" : "bg-white border-border hover:border-primary/40"}`}
+              className={`flex items-center gap-1.5 text-xs border rounded-lg px-3 py-2 transition-colors ${
+                showFilters ? "bg-primary text-white border-primary" : "bg-white border-border hover:border-primary/40"
+              }`}
             >
               <SlidersHorizontal className="w-3.5 h-3.5" />Filters
             </button>
+
+            {/* View toggle */}
+            <div className="flex items-center bg-white border border-border rounded-lg overflow-hidden">
+              <button
+                onClick={() => setView("list")}
+                title="List view"
+                className={`p-2 transition-colors ${view === "list" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <LayoutList className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setView("grid")}
+                title="Grid view"
+                className={`p-2 transition-colors ${view === "grid" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
 
         {/* Filter panel */}
-        {showFilters && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className="mb-5 p-4 bg-white border border-border rounded-2xl shadow-sm"
-          >
-            <div className="space-y-3">
-              <p className="text-sm font-semibold">Max price from</p>
-              <input
-                type="range" min={500} max={30000} step={500} value={maxPrice}
-                onChange={e => setMaxPrice(Number(e.target.value))}
-                className="w-full accent-primary"
-              />
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>KES 500</span>
-                <span className="font-semibold text-foreground">Up to KES {maxPrice.toLocaleString()}</span>
-                <span>KES 30,000</span>
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-        {/* Business cards */}
-        <div className="space-y-4 pb-12">
-          {filtered.length === 0 ? (
-            <div className="text-center py-16 text-muted-foreground">
-              <Search className="w-10 h-10 mx-auto mb-3 opacity-20" />
-              <p className="font-medium">No businesses found</p>
-              <p className="text-sm mt-1">Try a different search or category</p>
-            </div>
-          ) : filtered.map((biz, i) => (
+        <AnimatePresence>
+          {showFilters && (
             <motion.div
-              key={biz.id}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
-              className="bg-white border border-border rounded-2xl overflow-hidden hover:shadow-md hover:border-primary/20 transition-all group"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mb-5 p-4 bg-white border border-border rounded-2xl shadow-sm overflow-hidden"
             >
-              <Link href={`/book/${biz.slug}`}>
-                <div className="flex gap-4 p-4 cursor-pointer">
-                  {/* Avatar */}
-                  <div className={`w-16 h-16 rounded-xl bg-gradient-to-br ${biz.gradient} flex items-center justify-center shrink-0`}>
-                    <Scissors className="w-7 h-7 text-white" />
-                  </div>
-
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start gap-2 justify-between">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-semibold text-sm group-hover:text-primary transition-colors">{biz.name}</p>
-                        {biz.sponsored && (
-                          <Badge className="text-[10px] px-1.5 py-0 bg-amber-100 text-amber-700 border-amber-200">Sponsored</Badge>
-                        )}
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0 group-hover:text-primary transition-colors" />
-                    </div>
-
-                    <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                      <MapPin className="w-3 h-3 shrink-0" />
-                      <span>{biz.location}</span>
-                      <span className="text-border">·</span>
-                      <span>{biz.distance}</span>
-                    </div>
-
-                    <div className="flex items-center gap-3 mt-1.5 text-xs">
-                      <div className="flex items-center gap-1">
-                        <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                        <span className="font-semibold">{biz.rating}</span>
-                        <span className="text-muted-foreground">({biz.reviewCount})</span>
-                      </div>
-                      <div className="flex items-center gap-1 text-muted-foreground">
-                        <Clock className="w-3 h-3" />
-                        <span className={biz.available ? "text-green-600 font-medium" : ""}>
-                          {biz.available ? "Available today" : "Fully booked"}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between mt-2">
-                      <div className="flex gap-1.5 flex-wrap">
-                        {biz.tags.slice(0, 3).map(t => (
-                          <span key={t} className="text-[10px] px-2 py-0.5 bg-muted rounded-full text-muted-foreground">{t}</span>
-                        ))}
-                      </div>
-                      <span className="text-xs font-semibold text-foreground">
-                        from KES {biz.priceFrom.toLocaleString()}
-                      </span>
-                    </div>
-                  </div>
+              <div className="space-y-3">
+                <p className="text-sm font-semibold">Max price from</p>
+                <input
+                  type="range" min={500} max={30000} step={500} value={maxPrice}
+                  onChange={e => setMaxPrice(Number(e.target.value))}
+                  className="w-full accent-primary"
+                />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>KES 500</span>
+                  <span className="font-semibold text-foreground">Up to KES {maxPrice.toLocaleString()}</span>
+                  <span>KES 30,000</span>
                 </div>
-              </Link>
+              </div>
             </motion.div>
-          ))}
-        </div>
+          )}
+        </AnimatePresence>
+
+        {/* Results */}
+        {filtered.length === 0 ? (
+          <div className="text-center py-16 text-muted-foreground">
+            <Search className="w-10 h-10 mx-auto mb-3 opacity-20" />
+            <p className="font-medium">No businesses found</p>
+            <p className="text-sm mt-1">Try a different search or category</p>
+          </div>
+        ) : (
+          <AnimatePresence mode="wait">
+            {view === "list" ? (
+              <motion.div
+                key="list"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="space-y-3 pb-12"
+              >
+                {filtered.map((biz, i) => (
+                  <motion.div key={biz.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
+                    <ListCard biz={biz} />
+                  </motion.div>
+                ))}
+              </motion.div>
+            ) : (
+              <motion.div
+                key="grid"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 pb-12"
+              >
+                {filtered.map((biz, i) => (
+                  <motion.div key={biz.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
+                    <GridCard biz={biz} />
+                  </motion.div>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        )}
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Search, MoreHorizontal, Plus, Calendar as CalendarIcon, Filter,
   MessageSquare, Clock, DollarSign, CreditCard, User, CheckCircle2, AlertCircle,
+  LayoutList, LayoutGrid,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -173,12 +174,86 @@ export default function BookingsPage() {
     return matchesSearch;
   });
 
+  const [viewMode, setViewMode] = useState<"table" | "cards">("table");
+
   const tabs: { key: typeof activeTab; label: string }[] = [
     { key: "all", label: "All" },
     { key: "upcoming", label: "Upcoming" },
     { key: "completed", label: "Completed" },
     { key: "cancelled", label: "Cancelled" },
   ];
+
+  const statusGradient: Record<Status, string> = {
+    Confirmed:  "from-blue-500 to-indigo-600",
+    Pending:    "from-amber-400 to-orange-500",
+    Completed:  "from-emerald-500 to-teal-600",
+    Cancelled:  "from-red-500 to-rose-600",
+    "No-Show":  "from-slate-500 to-gray-700",
+  };
+
+  function BookingCard({ booking }: { booking: Booking }) {
+    const initials = booking.client.split(" ").map(n => n[0]).join("");
+    return (
+      <div className="bg-white border border-border rounded-2xl overflow-hidden hover:shadow-md hover:border-primary/20 transition-all flex flex-col">
+        {/* Top gradient banner with initials */}
+        <div className={`h-28 bg-gradient-to-br ${statusGradient[booking.status]} flex items-center justify-center relative`}>
+          <span className="text-3xl font-bold text-white/80">{initials}</span>
+          <span className="absolute top-2.5 right-2.5">
+            <StatusBadge status={booking.status} />
+          </span>
+        </div>
+
+        {/* Card body */}
+        <div className="p-3 flex flex-col gap-1.5 flex-1">
+          <div>
+            <p className="font-bold text-sm leading-tight">{booking.client}</p>
+            <p className="text-xs text-muted-foreground">{booking.phone}</p>
+          </div>
+          <p className="text-xs font-medium text-primary">{booking.service}</p>
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <CalendarIcon className="w-3 h-3 shrink-0" />
+            <span>{booking.date}</span>
+            <Clock className="w-3 h-3 shrink-0 ml-1" />
+            <span>{booking.time}</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs">
+            <DollarSign className="w-3 h-3 text-green-600 shrink-0" />
+            <span className="font-semibold">KES {booking.amount}</span>
+            <span className="text-muted-foreground">· {booking.payment}</span>
+          </div>
+        </div>
+
+        {/* Card footer */}
+        <div className="px-3 pb-3 pt-2 border-t border-border/50 flex items-center justify-between gap-2">
+          <Button variant="outline" size="sm" className="h-7 text-xs px-2.5 flex-1" onClick={() => openModal("details", booking)}>
+            Details
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0">
+                <MoreHorizontal className="h-3.5 w-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem onClick={() => openModal("message", booking)}>Message Client</DropdownMenuItem>
+              {(booking.status === "Pending" || booking.status === "Confirmed") && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => markBooking(booking.id, "Completed")}>✅ Mark Completed</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => markBooking(booking.id, "No-Show")}>🚫 No-Show</DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => openModal("reschedule", booking)}>Reschedule</DropdownMenuItem>
+                  <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => openModal("cancel", booking)}>
+                    Cancel Booking
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -188,15 +263,33 @@ export default function BookingsPage() {
           <h1 className="text-3xl font-bold tracking-tight">Bookings</h1>
           <p className="text-muted-foreground mt-1">Manage your appointments and schedule.</p>
         </div>
-        <Button className="gap-2 shadow-md" onClick={() => openModal("add")}>
-          <Plus className="w-5 h-5" />
-          Add Booking
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* View toggle */}
+          <div className="flex items-center bg-white border border-border rounded-lg overflow-hidden shadow-sm">
+            <button
+              onClick={() => setViewMode("table")}
+              title="Table view"
+              className={`p-2 transition-colors ${viewMode === "table" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              <LayoutList className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setViewMode("cards")}
+              title="Cards view"
+              className={`p-2 transition-colors ${viewMode === "cards" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+          </div>
+          <Button className="gap-2 shadow-md" onClick={() => openModal("add")}>
+            <Plus className="w-5 h-5" />
+            Add Booking
+          </Button>
+        </div>
       </div>
 
-      {/* Table card */}
+      {/* Shared filters bar — always visible */}
       <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
-        {/* Filters bar */}
         <div className="p-3 md:p-4 border-b flex flex-col gap-3">
           {/* Tabs */}
           <div className="flex items-center gap-1 overflow-x-auto">
@@ -239,8 +332,8 @@ export default function BookingsPage() {
           </div>
         </div>
 
-        {/* Desktop table */}
-        <div className="hidden md:block overflow-x-auto">
+        {/* Desktop table — table view only */}
+        {viewMode === "table" && <div className="hidden md:block overflow-x-auto">
           <Table>
             <TableHeader className="bg-muted/30">
               <TableRow className="hover:bg-transparent">
@@ -327,10 +420,10 @@ export default function BookingsPage() {
               )}
             </TableBody>
           </Table>
-        </div>
+        </div>}
 
-        {/* Mobile card list */}
-        <div className="md:hidden divide-y">
+        {/* Mobile card list — table view only */}
+        {viewMode === "table" && <div className="md:hidden divide-y">
           {filtered.length > 0 ? filtered.map((booking, idx) => (
             <motion.div
               key={booking.id}
@@ -401,7 +494,28 @@ export default function BookingsPage() {
               <Button variant="link" onClick={() => { setSearchTerm(""); setActiveTab("all"); }}>Clear filters</Button>
             </div>
           )}
-        </div>
+        </div>}
+
+        {/* Cards grid — cards view only */}
+        {viewMode === "cards" && (
+          <div className="p-4">
+            {filtered.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                {filtered.map((booking, idx) => (
+                  <motion.div key={booking.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.04 }}>
+                    <BookingCard booking={booking} />
+                  </motion.div>
+                ))}
+              </div>
+            ) : (
+              <div className="py-16 text-center text-muted-foreground">
+                <CalendarIcon className="h-8 w-8 mb-2 mx-auto opacity-20" />
+                <p>No bookings found.</p>
+                <Button variant="link" onClick={() => { setSearchTerm(""); setActiveTab("all"); }}>Clear filters</Button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Footer */}
         <div className="p-3 md:p-4 border-t bg-muted/10 text-xs text-muted-foreground flex items-center justify-between">
