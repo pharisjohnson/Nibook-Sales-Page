@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, Scissors, CalendarDays, Clock, Users, Settings, Calendar, Menu, BarChart3 } from "lucide-react";
+import { LayoutDashboard, Scissors, CalendarDays, Clock, Users, Settings, Calendar, Menu, BarChart3, Rocket } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth";
+import { useProfile } from "@/lib/profile";
 
 const navLinks = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -19,6 +21,12 @@ const navLinks = [
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { user } = useAuth();
+  const { profile } = useProfile();
+
+  const displayName = profile?.business_name || user?.user_metadata?.business_name || "My Business";
+  const displayEmail = user?.email ?? "";
+  const initials = displayName.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
 
   return (
     <div className="min-h-screen bg-muted/30 flex">
@@ -46,7 +54,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <span className="font-bold text-xl tracking-tight text-foreground">Nibook</span>
           </Link>
           <div className="px-1">
-            <p className="font-semibold text-sm">Amina's Beauty Studio</p>
+            <p className="font-semibold text-sm truncate">{displayName}</p>
             <p className="text-xs text-muted-foreground">Admin Portal</p>
           </div>
         </div>
@@ -77,22 +85,27 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Footer */}
         <div className="p-4 border-t space-y-4">
-          <div className="bg-muted rounded-xl p-4 flex flex-col items-center text-center space-y-3">
-            <Badge variant="outline" className="bg-background">Free Plan</Badge>
-            <p className="text-xs text-muted-foreground">Get more features with Pro.</p>
-            <Link href="/#pricing">
-              <Button className="w-full" size="sm">Upgrade to Pro</Button>
+          {/* Beta / Waitlist CTA */}
+          <div className="bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20 rounded-xl p-4 flex flex-col items-center text-center space-y-2">
+            <Badge className="bg-primary/20 text-primary border-0 text-xs font-semibold">Beta — Free Access</Badge>
+            <p className="text-xs text-muted-foreground leading-relaxed">Pro features coming soon. Join the waitlist for early access.</p>
+            <Link href="/waitlist" className="w-full">
+              <Button size="sm" variant="outline" className="w-full gap-1.5 text-xs border-primary/30 text-primary hover:bg-primary hover:text-white transition-colors">
+                <Rocket className="w-3.5 h-3.5" />
+                Join Waitlist
+              </Button>
             </Link>
           </div>
 
+          {/* User info */}
           <div className="flex items-center gap-3 px-2">
             <Avatar>
-              <AvatarImage src="https://i.pravatar.cc/150?u=amina" />
-              <AvatarFallback>AK</AvatarFallback>
+              <AvatarImage src={profile?.logo_url ?? undefined} />
+              <AvatarFallback className="bg-primary/10 text-primary font-semibold text-sm">{initials}</AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">Amina K.</p>
-              <p className="text-xs text-muted-foreground truncate">amina@example.com</p>
+              <p className="text-sm font-medium truncate">{displayName}</p>
+              <p className="text-xs text-muted-foreground truncate">{displayEmail}</p>
             </div>
           </div>
         </div>
