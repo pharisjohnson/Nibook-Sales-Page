@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,8 @@ import {
   Code2, FileText, Copy, Eye, EyeOff,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/auth";
+import { useProfile } from "@/lib/profile";
 
 const themes = [
   { id: "classic", name: "Classic", primary: "#0066CC", bg: "#FFFFFF" },
@@ -42,27 +44,55 @@ const connections = [
 
 export default function SettingsPage() {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const { profile, updateProfile } = useProfile();
   const [selectedTheme, setSelectedTheme] = useState("classic");
   const [hasChanges, setHasChanges] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [payments, setPayments] = useState(paymentMethods);
-  const [mpesaPaybill, setMpesaPaybill] = useState("247247");
-  const [mpesaAccount, setMpesaAccount] = useState("AminaBeauty");
+  const [mpesaPaybill, setMpesaPaybill] = useState("");
+  const [mpesaAccount, setMpesaAccount] = useState("");
   const [whatsappEnabled, setWhatsappEnabled] = useState(false);
   const [reminderHours, setReminderHours] = useState("24");
   const [whatsappPhone, setWhatsappPhone] = useState("");
-  const [businessName, setBusinessName] = useState("Amina's Beauty Studio");
-  const [businessPhone, setBusinessPhone] = useState("+254 700 123 456");
-  const [businessEmail, setBusinessEmail] = useState("amina@example.com");
+  const [businessName, setBusinessName] = useState("");
+  const [businessPhone, setBusinessPhone] = useState("");
+  const [businessEmail, setBusinessEmail] = useState("");
+  const [businessLocation, setBusinessLocation] = useState("");
   const [policyText, setPolicyText] = useState("Cancellations made less than 24 hours before your appointment are non-refundable. No-shows will be charged the full service fee. To reschedule, please contact us at least 4 hours in advance.");
   const [showPolicy, setShowPolicy] = useState(true);
   const [widgetTheme, setWidgetTheme] = useState<"light" | "dark">("light");
+
+  useEffect(() => {
+    if (profile) {
+      setBusinessName(profile.business_name ?? "");
+      setBusinessPhone(profile.phone ?? "");
+      setBusinessLocation(profile.location ?? "");
+    }
+    if (user) {
+      setBusinessEmail(user.email ?? "");
+    }
+  }, [profile, user]);
 
   const togglePayment = (id: string) => {
     setPayments(payments.map(p => p.id === id ? { ...p, enabled: !p.enabled } : p));
     setHasChanges(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    setSaving(true);
+    const slug = businessName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+    const { error } = await updateProfile({
+      business_name: businessName.trim() || null,
+      phone: businessPhone.trim() || null,
+      location: businessLocation.trim() || null,
+      slug: slug || null,
+    });
+    setSaving(false);
+    if (error && !error.includes("duplicate")) {
+      toast({ title: "Error saving", description: error, variant: "destructive" });
+      return;
+    }
     setHasChanges(false);
     toast({ title: "Settings saved", description: "Your changes have been saved successfully." });
   };
@@ -74,12 +104,12 @@ export default function SettingsPage() {
           <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
           <p className="text-muted-foreground mt-1">Manage your workspace preferences.</p>
         </div>
-        <Button className="gap-2 shadow-md relative" onClick={handleSave}>
-          {hasChanges && (
+        <Button className="gap-2 shadow-md relative" onClick={handleSave} disabled={saving}>
+          {hasChanges && !saving && (
             <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-accent rounded-full border-2 border-background" />
           )}
           <Save className="w-4 h-4" />
-          Save Changes
+          {saving ? "Saving…" : "Save Changes"}
         </Button>
       </div>
 
@@ -106,15 +136,20 @@ export default function SettingsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div className="space-y-2">
                     <Label htmlFor="biz-name">Business name</Label>
-                    <Input id="biz-name" value={businessName} onChange={e => { setBusinessName(e.target.value); setHasChanges(true); }} />
+                    <Input id="biz-name" placeholder="Your business name" value={businessName} onChange={e => { setBusinessName(e.target.value); setHasChanges(true); }} />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="biz-phone">Phone number</Label>
-                    <Input id="biz-phone" value={businessPhone} onChange={e => { setBusinessPhone(e.target.value); setHasChanges(true); }} />
+                    <Input id="biz-phone" placeholder="+254 700 000 000" value={businessPhone} onChange={e => { setBusinessPhone(e.target.value); setHasChanges(true); }} />
                   </div>
-                  <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="biz-email">Contact email</Label>
-                    <Input id="biz-email" type="email" value={businessEmail} onChange={e => { setBusinessEmail(e.target.value); setHasChanges(true); }} />
+                  <div className="space-y-2">
+                    <Label htmlFor="biz-email">Account email</Label>
+                    <Input id="biz-email" type="email" value={businessEmail} readOnly className="bg-muted/50 cursor-not-allowed" />
+                    <p className="text-xs text-muted-foreground">Email is linked to your account and cannot be changed here.</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="biz-location">Location</Label>
+                    <Input id="biz-location" placeholder="e.g. Westlands, Nairobi" value={businessLocation} onChange={e => { setBusinessLocation(e.target.value); setHasChanges(true); }} />
                   </div>
                 </div>
                 <Separator />
@@ -122,8 +157,10 @@ export default function SettingsPage() {
                   <Label>Your booking link</Label>
                   <div className="flex items-center gap-2 p-3 bg-muted rounded-lg border text-sm">
                     <span className="text-muted-foreground">nibook.com/book/</span>
-                    <span className="font-semibold text-primary">aminas-beauty-studio</span>
-                    <Button variant="ghost" size="icon" className="ml-auto h-7 w-7">
+                    <span className="font-semibold text-primary">{profile?.slug || "your-business"}</span>
+                    <Button variant="ghost" size="icon" className="ml-auto h-7 w-7" onClick={() => {
+                      if (profile?.slug) window.open(`/book/${profile.slug}`, "_blank");
+                    }}>
                       <ExternalLink className="w-3.5 h-3.5" />
                     </Button>
                   </div>

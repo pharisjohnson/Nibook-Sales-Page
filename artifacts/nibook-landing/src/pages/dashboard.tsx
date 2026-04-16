@@ -11,13 +11,16 @@ import {
   Smartphone, Star, Zap, BarChart3, Users, AlertTriangle,
   Link2, Share2, QrCode, Eye, MousePointerClick, DollarSign,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/auth";
+import { useProfile } from "@/lib/profile";
+import { supabase } from "@/lib/supabase";
 
 type BookingStatus = "Confirmed" | "Pending" | "Cancelled";
 type Booking = {
-  id: number;
+  id: string;
   client: string;
   initials: string;
   service: string;
@@ -29,12 +32,6 @@ type Booking = {
   status: BookingStatus;
 };
 
-const initialBookings: Booking[] = [
-  { id: 1, client: "Maria N.", initials: "MN", service: "Hair Braiding", time: "10:00 AM", date: "Today", duration: "2 hrs", amount: "KES 2,500", phone: "+254 712 345 678", status: "Confirmed" },
-  { id: 2, client: "James O.", initials: "JO", service: "Beard Trim", time: "2:30 PM", date: "Today", duration: "30 min", amount: "KES 800", phone: "+254 722 987 654", status: "Confirmed" },
-  { id: 3, client: "Grace M.", initials: "GM", service: "Locs Retwist", time: "9:00 AM", date: "Tomorrow", duration: "3 hrs", amount: "KES 3,500", phone: "+254 733 456 789", status: "Pending" },
-];
-
 const statusStyle: Record<BookingStatus, string> = {
   Confirmed: "bg-blue-100 text-blue-700 border-blue-200",
   Pending: "bg-yellow-100 text-yellow-700 border-yellow-200",
@@ -45,15 +42,55 @@ const statusStyle: Record<BookingStatus, string> = {
 export default function DashboardHome() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const [bookings, setBookings] = useState<Booking[]>(initialBookings);
+  const { user } = useAuth();
+  const { profile } = useProfile();
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [bookingsLoading, setBookingsLoading] = useState(true);
   const [viewBooking, setViewBooking] = useState<Booking | null>(null);
   const [cancelTarget, setCancelTarget] = useState<Booking | null>(null);
   const [showBookingPage, setShowBookingPage] = useState(false);
-  const [showUpgrade, setShowUpgrade] = useState(false);
   const [copied, setCopied] = useState(false);
   const [statModal, setStatModal] = useState<"revenue" | "bookings" | "completion" | "topservice" | null>(null);
 
-  const bookingPageUrl = "https://nibook.com/book/aminas-beauty-studio";
+  const firstName = profile?.business_name?.split(" ")[0] ?? user?.email?.split("@")[0] ?? "there";
+  const bookingSlug = profile?.slug ?? "your-business";
+  const bookingPageUrl = `https://nibook.com/book/${bookingSlug}`;
+
+  useEffect(() => {
+    if (!user) return;
+    setBookingsLoading(true);
+    supabase
+      .from("bookings")
+      .select("*, services(name)")
+      .eq("owner_id", user.id)
+      .order("scheduled_at", { ascending: true })
+      .limit(10)
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          const mapped: Booking[] = data.map((b: any) => {
+            const dt = b.scheduled_at ? new Date(b.scheduled_at) : null;
+            const isToday = dt ? new Date().toDateString() === dt.toDateString() : false;
+            const isTomorrow = dt ? new Date(Date.now() + 86400000).toDateString() === dt.toDateString() : false;
+            return {
+              id: b.id,
+              client: b.client_name ?? "Client",
+              initials: (b.client_name ?? "C").split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase(),
+              service: b.services?.name ?? "Service",
+              time: dt ? dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "",
+              date: isToday ? "Today" : isTomorrow ? "Tomorrow" : dt ? dt.toLocaleDateString() : "",
+              duration: b.duration_minutes ? `${b.duration_minutes} min` : "",
+              amount: b.amount ? `KES ${Number(b.amount).toLocaleString()}` : "",
+              phone: b.client_phone ?? "",
+              status: (b.status === "confirmed" ? "Confirmed" : b.status === "cancelled" ? "Cancelled" : "Pending") as BookingStatus,
+            };
+          });
+          setBookings(mapped);
+        } else {
+          setBookings([]);
+        }
+        setBookingsLoading(false);
+      });
+  }, [user]);
 
   const copyUrl = () => {
     navigator.clipboard.writeText(bookingPageUrl);
@@ -82,10 +119,12 @@ export default function DashboardHome() {
         {/* Header */}
         <motion.div variants={item} className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground">Good morning, Amina! ☀️</h1>
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">Good morning, {firstName}! ☀️</h1>
             <p className="text-muted-foreground mt-1 flex items-center gap-2 text-sm">
               <Clock className="w-4 h-4" />
-              Next appointment in 2 hours — <span className="font-medium text-foreground">Maria N. at 10:00 AM</span>
+              {activeBookings.length > 0
+                ? <>Next appointment — <span className="font-medium text-foreground">{activeBookings[0].client} at {activeBookings[0].time}</span></>
+                : "No upcoming bookings yet. Share your booking link to get started!"}
             </p>
           </div>
           <div className="flex gap-3">
@@ -696,51 +735,6 @@ export default function DashboardHome() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Upgrade / Pro modal ── */}
-      <Dialog open={showUpgrade} onOpenChange={setShowUpgrade}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Zap className="w-5 h-5 text-yellow-500" />
-              Nibook Pro
-            </DialogTitle>
-            <DialogDescription>Everything you need to grow your service business.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { icon: Smartphone, label: "Branded mobile app", desc: "iOS & Android" },
-                { icon: Star, label: "Custom domain", desc: "yourbrand.com" },
-                { icon: CalendarIcon, label: "Unlimited bookings", desc: "No cap ever" },
-                { icon: BarChart3, label: "Advanced analytics", desc: "Revenue reports" },
-                { icon: Users, label: "Unlimited staff", desc: "Full team access" },
-                { icon: MessageSquare, label: "WhatsApp blasts", desc: "Marketing campaigns" },
-              ].map(({ icon: Icon, label, desc }) => (
-                <div key={label} className="flex items-start gap-2.5 p-3 bg-muted/40 rounded-xl">
-                  <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center text-primary shrink-0">
-                    <Icon className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold">{label}</p>
-                    <p className="text-xs text-muted-foreground">{desc}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="p-4 bg-primary rounded-xl text-primary-foreground text-center">
-              <p className="text-2xl font-bold">KES 2,500<span className="text-base font-normal text-primary-foreground/70">/month</span></p>
-              <p className="text-xs text-primary-foreground/70 mt-1">Cancel anytime · 14-day free trial</p>
-            </div>
-          </div>
-          <DialogFooter className="gap-2 sm:gap-2">
-            <Button variant="outline" onClick={() => setShowUpgrade(false)}>Maybe Later</Button>
-            <Button className="flex-1 gap-2" onClick={() => { setShowUpgrade(false); toast({ title: "🎉 Pro trial started!", description: "Your 14-day free trial is now active." }); }}>
-              <Zap className="w-4 h-4" />
-              Start Free Trial
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }

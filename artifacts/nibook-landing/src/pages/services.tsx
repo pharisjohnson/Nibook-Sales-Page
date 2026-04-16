@@ -20,8 +20,10 @@ import {
   Plus, MoreHorizontal, Clock, DollarSign, Image as ImageIcon,
   AlertCircle, Upload, X, ChevronLeft, ChevronRight, ListChecks, Trash2,
 } from "lucide-react";
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/auth";
+import { supabase } from "@/lib/supabase";
 
 const MAX_IMAGES = 2;
 
@@ -29,7 +31,7 @@ type FieldType = "text" | "number" | "checkbox" | "select";
 type IntakeField = { id: number; label: string; type: FieldType; required: boolean; options: string };
 
 type Service = {
-  id: number;
+  id: string;
   name: string;
   price: string;
   duration: number;
@@ -48,13 +50,7 @@ const gradients = [
   "from-sky-500 to-indigo-500",
 ];
 
-const initialServices: Service[] = [
-  { id: 1, name: "Hair Braiding", price: "2,500", duration: 120, active: true, color: gradients[0], images: [], intakeFields: [{ id: 1, label: "Hair length", type: "select", required: true, options: "Short,Medium,Long,Very Long" }, { id: 2, label: "Any allergies?", type: "text", required: false, options: "" }] },
-  { id: 2, name: "Beard Trim & Shape", price: "800", duration: 30, active: true, color: gradients[1], images: [], intakeFields: [] },
-  { id: 3, name: "Locs Retwist", price: "3,500", duration: 180, active: false, color: gradients[2], images: [], intakeFields: [] },
-];
-
-const MAX_FREE_SERVICES = 3;
+const MAX_FREE_SERVICES = 10;
 
 /* ── Scrollable image banner on the service card ── */
 function ServiceImageBanner({ service }: { service: Service }) {
@@ -328,7 +324,9 @@ function IntakeFieldsEditor({ fields, onChange }: { fields: IntakeField[]; onCha
 /* ── Main page ── */
 export default function ServicesPage() {
   const { toast } = useToast();
-  const [services, setServices] = useState<Service[]>(initialServices);
+  const { user } = useAuth();
+  const [services, setServices] = useState<Service[]>([]);
+  const [loadingServices, setLoadingServices] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [form, setForm] = useState({ name: "", price: "", duration: "60" });
@@ -336,9 +334,34 @@ export default function ServicesPage() {
   const [formIntakeFields, setFormIntakeFields] = useState<IntakeField[]>([]);
   const [formError, setFormError] = useState("");
 
+  useEffect(() => {
+    if (!user) return;
+    setLoadingServices(true);
+    supabase
+      .from("services")
+      .select("*")
+      .eq("owner_id", user.id)
+      .order("created_at", { ascending: true })
+      .then(({ data }) => {
+        if (data) {
+          setServices(data.map((s: any, i: number) => ({
+            id: s.id,
+            name: s.name,
+            price: Number(s.price ?? 0).toLocaleString(),
+            duration: s.duration_minutes ?? 60,
+            active: s.is_active ?? true,
+            color: gradients[i % gradients.length],
+            images: s.image_url ? [s.image_url] : [],
+            intakeFields: [],
+          })));
+        }
+        setLoadingServices(false);
+      });
+  }, [user]);
+
   const openAdd = () => {
     if (services.length >= MAX_FREE_SERVICES) {
-      toast({ title: "Service limit reached", description: "Upgrade to Pro to add unlimited services.", variant: "destructive" });
+      toast({ title: "Service limit reached", description: "You can add up to 10 services in the beta.", variant: "destructive" });
       return;
     }
     setEditingService(null);
@@ -358,13 +381,25 @@ export default function ServicesPage() {
     setDialogOpen(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.name.trim()) { setFormError("Service name is required."); return; }
     if (!form.price.trim() || isNaN(Number(form.price))) { setFormError("Please enter a valid price."); return; }
+    if (!user) return;
     setFormError("");
-    const priceFormatted = Number(form.price).toLocaleString();
+    const priceNum = Number(form.price);
+    const priceFormatted = priceNum.toLocaleString();
 
     if (editingService) {
+      const { error } = await supabase
+        .from("services")
+        .update({
+          name: form.name.trim(),
+          price: priceNum,
+          duration_minutes: Number(form.duration),
+          image_url: formImages[0] ?? null,
+        })
+        .eq("id", editingService.id);
+      if (error) { setFormError("Failed to update service."); return; }
       setServices(services.map(s =>
         s.id === editingService.id
           ? { ...s, name: form.name, price: priceFormatted, duration: Number(form.duration), images: formImages, intakeFields: formIntakeFields }
@@ -372,8 +407,21 @@ export default function ServicesPage() {
       ));
       toast({ title: "Service updated", description: `"${form.name}" has been updated.` });
     } else {
+      const { data, error } = await supabase
+        .from("services")
+        .insert({
+          owner_id: user.id,
+          name: form.name.trim(),
+          price: priceNum,
+          duration_minutes: Number(form.duration),
+          image_url: formImages[0] ?? null,
+          is_active: true,
+        })
+        .select()
+        .single();
+      if (error) { setFormError("Failed to add service."); return; }
       const newService: Service = {
-        id: Date.now(),
+        id: data.id,
         name: form.name,
         price: priceFormatted,
         duration: Number(form.duration),
@@ -388,14 +436,19 @@ export default function ServicesPage() {
     setDialogOpen(false);
   };
 
-  const deleteService = (id: number) => {
+  const deleteService = async (id: string) => {
     const svc = services.find(s => s.id === id);
+    await supabase.from("services").delete().eq("id", id);
     setServices(services.filter(s => s.id !== id));
     toast({ title: "Service deleted", description: `"${svc?.name}" has been removed.` });
   };
 
-  const toggleService = (id: number) => {
-    setServices(services.map(s => s.id === id ? { ...s, active: !s.active } : s));
+  const toggleService = async (id: string) => {
+    const svc = services.find(s => s.id === id);
+    if (!svc) return;
+    const newActive = !svc.active;
+    await supabase.from("services").update({ is_active: newActive }).eq("id", id);
+    setServices(services.map(s => s.id === id ? { ...s, active: newActive } : s));
   };
 
   return (
@@ -414,12 +467,32 @@ export default function ServicesPage() {
       <Card className="bg-muted/50 border-dashed">
         <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-4">
           <div className="flex-1">
-            <p className="text-sm font-medium">Free Plan: {services.length} of {MAX_FREE_SERVICES} services used</p>
+            <p className="text-sm font-medium">Beta — {services.length} of {MAX_FREE_SERVICES} services used</p>
             <Progress value={(services.length / MAX_FREE_SERVICES) * 100} className="h-2 mt-2" />
           </div>
-          <Button variant="outline" size="sm" className="shrink-0 bg-background">Upgrade Plan</Button>
+          <Badge variant="outline" className="text-xs text-primary border-primary/30 shrink-0">Free during beta</Badge>
         </CardContent>
       </Card>
+
+      {loadingServices ? (
+        <div className="flex items-center justify-center py-20 text-muted-foreground text-sm">Loading services…</div>
+      ) : services.length === 0 ? (
+        <Card className="border-dashed">
+          <CardContent className="py-20 flex flex-col items-center gap-4 text-center">
+            <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+              <Plus className="w-8 h-8 text-primary" />
+            </div>
+            <div>
+              <p className="font-semibold text-lg">No services yet</p>
+              <p className="text-muted-foreground text-sm mt-1">Add your first service to start accepting bookings.</p>
+            </div>
+            <Button className="gap-2" onClick={openAdd}>
+              <Plus className="w-4 h-4" />
+              Add Your First Service
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {services.map((service, idx) => (

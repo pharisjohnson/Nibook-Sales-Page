@@ -12,6 +12,12 @@ create table if not exists public.profiles (
   business_name text,
   slug text unique,
   phone text,
+  location text,
+  bio text,
+  category text,
+  logo_url text,
+  cover_url text,
+  onboarding_completed boolean default false,
   plan text default 'starter' check (plan in ('starter', 'premium', 'enterprise')),
   plan_expires_at timestamptz,
   avatar_url text,
@@ -19,6 +25,28 @@ create table if not exists public.profiles (
 );
 
 alter table public.profiles enable row level security;
+
+-- Migration: add new columns if they don't exist (safe to re-run)
+do $$ begin
+  if not exists (select 1 from information_schema.columns where table_name='profiles' and column_name='location') then
+    alter table public.profiles add column location text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='profiles' and column_name='bio') then
+    alter table public.profiles add column bio text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='profiles' and column_name='category') then
+    alter table public.profiles add column category text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='profiles' and column_name='logo_url') then
+    alter table public.profiles add column logo_url text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='profiles' and column_name='cover_url') then
+    alter table public.profiles add column cover_url text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='profiles' and column_name='onboarding_completed') then
+    alter table public.profiles add column onboarding_completed boolean default false;
+  end if;
+end $$;
 
 create policy "Users can view own profile"
   on public.profiles for select using (auth.uid() = id);
@@ -90,6 +118,24 @@ alter table public.bookings enable row level security;
 
 create policy "Owners can manage their bookings"
   on public.bookings for all using (auth.uid() = owner_id);
+
+-- ─────────────────────────────────────────────
+-- waitlist
+-- ─────────────────────────────────────────────
+create table if not exists public.waitlist (
+  id uuid primary key default gen_random_uuid(),
+  email text unique not null,
+  name text,
+  created_at timestamptz default now()
+);
+
+alter table public.waitlist enable row level security;
+
+create policy "Anyone can join waitlist"
+  on public.waitlist for insert with check (true);
+
+create policy "Service role can view waitlist"
+  on public.waitlist for select using (true);
 
 -- ─────────────────────────────────────────────
 -- payments

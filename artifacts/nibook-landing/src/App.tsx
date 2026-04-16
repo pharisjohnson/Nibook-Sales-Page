@@ -1,4 +1,4 @@
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -7,8 +7,11 @@ import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import DirectoryPage from "@/pages/directory";
 import BookingStorePage from "@/pages/booking-store";
+import WaitlistPage from "@/pages/waitlist";
+import OnboardingPage from "@/pages/onboarding";
 
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
+import { useAuth } from "@/lib/auth";
 import DashboardHome from "@/pages/dashboard";
 import ServicesPage from "@/pages/services";
 import BookingsPage from "@/pages/bookings";
@@ -26,53 +29,42 @@ const queryClient = new QueryClient({
   },
 });
 
+function ProtectedDashboard({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (!user) return <Redirect to="/" />;
+  return <DashboardLayout>{children}</DashboardLayout>;
+}
+
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/directory" component={DirectoryPage} />
       <Route path="/book/:slug" component={BookingStorePage} />
+      <Route path="/waitlist" component={WaitlistPage} />
+      <Route path="/onboarding" component={OnboardingPage} />
 
       <Route path="/dashboard">
-        <DashboardLayout>
-          <DashboardHome />
-        </DashboardLayout>
+        <ProtectedDashboard><DashboardHome /></ProtectedDashboard>
       </Route>
-
       <Route path="/services">
-        <DashboardLayout>
-          <ServicesPage />
-        </DashboardLayout>
+        <ProtectedDashboard><ServicesPage /></ProtectedDashboard>
       </Route>
-
       <Route path="/bookings">
-        <DashboardLayout>
-          <BookingsPage />
-        </DashboardLayout>
+        <ProtectedDashboard><BookingsPage /></ProtectedDashboard>
       </Route>
-
       <Route path="/availability">
-        <DashboardLayout>
-          <AvailabilityPage />
-        </DashboardLayout>
+        <ProtectedDashboard><AvailabilityPage /></ProtectedDashboard>
       </Route>
-
       <Route path="/team">
-        <DashboardLayout>
-          <TeamPage />
-        </DashboardLayout>
+        <ProtectedDashboard><TeamPage /></ProtectedDashboard>
       </Route>
-
       <Route path="/settings">
-        <DashboardLayout>
-          <SettingsPage />
-        </DashboardLayout>
+        <ProtectedDashboard><SettingsPage /></ProtectedDashboard>
       </Route>
-
       <Route path="/analytics">
-        <DashboardLayout>
-          <AnalyticsPage />
-        </DashboardLayout>
+        <ProtectedDashboard><AnalyticsPage /></ProtectedDashboard>
       </Route>
 
       <Route component={NotFound} />

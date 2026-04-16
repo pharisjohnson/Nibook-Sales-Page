@@ -45,7 +45,7 @@ export function AuthModal({ open, onClose, defaultTab = "signin" }: AuthModalPro
         if (err) { setError(err); return; }
       }
       onClose();
-      navigate("/dashboard");
+      navigate(tab === "signup" ? "/onboarding" : "/dashboard");
     } finally {
       setLoading(false);
     }
