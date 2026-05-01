@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import {
 import {
   Palette, MessageSquare, Link2, CreditCard, HelpCircle, Save,
   Check, Phone, Building2, Smartphone, Wallet, ExternalLink,
-  Code2, FileText, Copy, Eye, EyeOff,
+  Code2, FileText, Copy, Eye, EyeOff, Camera, ImagePlus, Trash2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
@@ -59,6 +59,10 @@ export default function SettingsPage() {
   const [businessPhone, setBusinessPhone] = useState("");
   const [businessEmail, setBusinessEmail] = useState("");
   const [businessLocation, setBusinessLocation] = useState("");
+  const [coverUrl, setCoverUrl] = useState("");
+  const [logoUrl, setLogoUrl] = useState("");
+  const coverInputRef = useRef<HTMLInputElement>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
   const [policyText, setPolicyText] = useState("Cancellations made less than 24 hours before your appointment are non-refundable. No-shows will be charged the full service fee. To reschedule, please contact us at least 4 hours in advance.");
   const [showPolicy, setShowPolicy] = useState(true);
   const [widgetTheme, setWidgetTheme] = useState<"light" | "dark">("light");
@@ -68,6 +72,8 @@ export default function SettingsPage() {
       setBusinessName(profile.business_name ?? "");
       setBusinessPhone(profile.phone ?? "");
       setBusinessLocation(profile.location ?? "");
+      setCoverUrl((profile as Record<string, unknown>).cover_url as string ?? "");
+      setLogoUrl((profile as Record<string, unknown>).logo_url as string ?? "");
     }
     if (user) {
       setBusinessEmail(user.email ?? "");
@@ -78,6 +84,19 @@ export default function SettingsPage() {
     setPayments(payments.map(p => p.id === id ? { ...p, enabled: !p.enabled } : p));
     setHasChanges(true);
   };
+
+  const handleCoverUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) { setCoverUrl(URL.createObjectURL(file)); setHasChanges(true); }
+  };
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) { setLogoUrl(URL.createObjectURL(file)); setHasChanges(true); }
+  };
+
+  const getInitials = (name: string) =>
+    name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase() || "B";
 
   const handleSave = async () => {
     setSaving(true);
@@ -126,7 +145,92 @@ export default function SettingsPage() {
         </TabsList>
 
         <TabsContent value="business">
-          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+            {/* Branding: Cover + Logo */}
+            <Card className="shadow-sm overflow-hidden">
+              <CardHeader>
+                <CardTitle>Branding</CardTitle>
+                <CardDescription>Set your cover photo and logo — these appear at the top of your booking page.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 pb-6">
+                {/* Cover preview */}
+                <div>
+                  <Label className="mb-2 block">Cover photo</Label>
+                  <div className="relative h-40 rounded-xl overflow-hidden border border-border bg-muted group">
+                    {coverUrl ? (
+                      <img src={coverUrl} alt="Cover" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-pink-500 via-rose-500 to-orange-400 flex items-center justify-center">
+                        <p className="text-white/70 text-sm font-medium">No cover photo set</p>
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="gap-1.5 shadow"
+                        onClick={() => coverInputRef.current?.click()}
+                      >
+                        <ImagePlus className="w-3.5 h-3.5" />
+                        {coverUrl ? "Change" : "Upload"}
+                      </Button>
+                      {coverUrl && (
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          className="gap-1.5 shadow"
+                          onClick={() => { setCoverUrl(""); setHasChanges(true); }}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Remove
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  <input ref={coverInputRef} type="file" accept="image/*" className="hidden" onChange={handleCoverUpload} />
+                  <p className="text-xs text-muted-foreground mt-1.5">Recommended: 1200×400px, JPG or PNG. Max 5 MB.</p>
+                </div>
+
+                {/* Logo preview */}
+                <div>
+                  <Label className="mb-2 block">Logo</Label>
+                  <div className="flex items-center gap-4">
+                    <div
+                      className="relative w-20 h-20 rounded-2xl border-2 border-border overflow-hidden cursor-pointer group shrink-0"
+                      onClick={() => logoInputRef.current?.click()}
+                    >
+                      {logoUrl ? (
+                        <img src={logoUrl} alt="Logo" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center">
+                          <span className="text-white text-xl font-bold">{getInitials(businessName)}</span>
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <Camera className="w-5 h-5 text-white" />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Button variant="outline" size="sm" className="gap-1.5" onClick={() => logoInputRef.current?.click()}>
+                        <ImagePlus className="w-3.5 h-3.5" />
+                        {logoUrl ? "Change logo" : "Upload logo"}
+                      </Button>
+                      {logoUrl && (
+                        <Button variant="ghost" size="sm" className="gap-1.5 text-destructive hover:text-destructive block"
+                          onClick={() => { setLogoUrl(""); setHasChanges(true); }}
+                        >
+                          <Trash2 className="w-3.5 h-3.5 inline mr-1" />Remove
+                        </Button>
+                      )}
+                      <p className="text-xs text-muted-foreground">Square image, 400×400px recommended.</p>
+                    </div>
+                  </div>
+                  <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Business info */}
             <Card className="shadow-sm">
               <CardHeader>
                 <CardTitle>Business Profile</CardTitle>
