@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,10 +18,12 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { useAuth } from "@/lib/auth";
+import { insforge } from "@/lib/insforge";
 import {
   Search, MoreHorizontal, Plus, Calendar as CalendarIcon, Filter,
   MessageSquare, Clock, DollarSign, CreditCard, User, CheckCircle2, AlertCircle,
-  LayoutList, LayoutGrid,
+  LayoutList, LayoutGrid, Loader2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -38,17 +40,6 @@ type Booking = {
   status: Status;
   notes: string;
 };
-
-const initialBookings: Booking[] = [
-  { id: "B1001", client: "Maria N.", phone: "+254 712 345 678", service: "Hair Braiding", date: "Oct 24, 2023", time: "10:00 AM", amount: "2,500", payment: "M-Pesa", status: "Confirmed", notes: "Prefers box braids. Regular client." },
-  { id: "B1002", client: "James O.", phone: "+254 722 111 222", service: "Beard Trim", date: "Oct 24, 2023", time: "02:30 PM", amount: "800", payment: "In Person", status: "Confirmed", notes: "" },
-  { id: "B1003", client: "Grace M.", phone: "+254 733 444 555", service: "Locs Retwist", date: "Oct 25, 2023", time: "09:00 AM", amount: "3,500", payment: "Bank Transfer", status: "Pending", notes: "Waiting for payment confirmation." },
-  { id: "B1004", client: "David K.", phone: "+254 701 667 889", service: "Haircut", date: "Oct 22, 2023", time: "11:00 AM", amount: "1,000", payment: "M-Pesa", status: "Completed", notes: "" },
-  { id: "B1005", client: "Fatuma A.", phone: "+254 744 900 123", service: "Hair Braiding", date: "Oct 21, 2023", time: "01:00 PM", amount: "2,500", payment: "In Person", status: "Completed", notes: "Long session, great tip." },
-  { id: "B1006", client: "Peter M.", phone: "+254 799 555 001", service: "Beard Trim", date: "Oct 20, 2023", time: "04:00 PM", amount: "800", payment: "M-Pesa", status: "Cancelled", notes: "Client cancelled same day." },
-  { id: "B1007", client: "Lucy W.", phone: "+254 700 234 567", service: "Locs Retwist", date: "Oct 19, 2023", time: "10:30 AM", amount: "3,500", payment: "M-Pesa", status: "Completed", notes: "" },
-  { id: "B1008", client: "Aisha B.", phone: "+254 711 888 999", service: "Hair Braiding", date: "Oct 26, 2023", time: "03:00 PM", amount: "2,500", payment: "-", status: "Pending", notes: "New client referral." },
-];
 
 const SERVICES = ["Hair Braiding", "Beard Trim", "Locs Retwist", "Haircut", "Massage"];
 const PAYMENTS = ["M-Pesa", "Bank Transfer", "In Person", "PayPal"];
@@ -73,7 +64,9 @@ type ModalType = "details" | "message" | "reschedule" | "cancel" | "add" | "mark
 
 export default function BookingsPage() {
   const { toast } = useToast();
-  const [bookings, setBookings] = useState(initialBookings);
+  const { user } = useAuth();
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState<"all" | "upcoming" | "completed" | "cancelled">("all");
   const [modal, setModal] = useState<ModalType>(null);
@@ -89,6 +82,35 @@ export default function BookingsPage() {
   // Add Booking state
   const [addForm, setAddForm] = useState({ client: "", phone: "", service: "Hair Braiding", date: "", time: "10:00 AM", payment: "M-Pesa", notes: "" });
   const [addError, setAddError] = useState("");
+
+  useEffect(() => {
+    if (!user) return;
+    setLoading(true);
+    insforge.database
+      .from("bookings")
+      .select("*, services(name)")
+      .eq("owner_id", user.id)
+      .order("scheduled_at", { ascending: false })
+      .then(({ data }) => {
+        if (data) {
+          const mapped: Booking[] = data.map((b: any) => ({
+            id: b.id,
+            client: b.client_name ?? "Client",
+            phone: b.client_phone ?? "",
+            service: b.services?.name ?? "Service",
+            date: b.scheduled_at ? new Date(b.scheduled_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "",
+            time: b.scheduled_at ? new Date(b.scheduled_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "",
+            amount: b.amount ? b.amount.toString() : "0",
+            payment: b.payment_method ?? "-",
+            status: b.status === "confirmed" ? "Confirmed" : b.status === "cancelled" ? "Cancelled" : b.status === "completed" ? "Completed" : b.status === "no_show" ? "No-Show" : "Pending",
+            notes: b.notes ?? "",
+          }));
+          setBookings(mapped);
+        }
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, [user]);
 
   const openModal = (type: ModalType, booking: Booking | null = null) => {
     setSelected(booking);
@@ -334,6 +356,11 @@ export default function BookingsPage() {
 
         {/* Desktop table — table view only */}
         {viewMode === "table" && <div className="hidden md:block overflow-x-auto">
+          {loading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
           <Table>
             <TableHeader className="bg-muted/30">
               <TableRow className="hover:bg-transparent">
@@ -420,11 +447,16 @@ export default function BookingsPage() {
               )}
             </TableBody>
           </Table>
+          )}
         </div>}
 
         {/* Mobile card list — table view only */}
         {viewMode === "table" && <div className="md:hidden divide-y">
-          {filtered.length > 0 ? filtered.map((booking, idx) => (
+          {loading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : filtered.length > 0 ? filtered.map((booking, idx) => (
             <motion.div
               key={booking.id}
               initial={{ opacity: 0, y: 8 }}
@@ -499,7 +531,11 @@ export default function BookingsPage() {
         {/* Cards grid — cards view only */}
         {viewMode === "cards" && (
           <div className="p-4">
-            {filtered.length > 0 ? (
+            {loading ? (
+              <div className="flex items-center justify-center py-20">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : filtered.length > 0 ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                 {filtered.map((booking, idx) => (
                   <motion.div key={booking.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.04 }}>

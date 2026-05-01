@@ -9,7 +9,7 @@ import {
   ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Scissors, CalendarCheck,
   Clock, MessageSquare, Plus, ExternalLink, Calendar as CalendarIcon, Copy, Check,
   Smartphone, Star, Zap, BarChart3, Users, AlertTriangle,
-  Link2, Share2, QrCode, Eye, MousePointerClick, DollarSign,
+  Link2, Share2, QrCode, Eye, MousePointerClick, DollarSign, Loader2,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
@@ -55,6 +55,34 @@ export default function DashboardHome() {
   const firstName = profile?.business_name?.split(" ")[0] ?? user?.email?.split("@")[0] ?? "there";
   const bookingSlug = profile?.slug ?? "your-business";
   const bookingPageUrl = `https://nibook.com/book/${bookingSlug}`;
+  const [stats, setStats] = useState({ revenue: 0, count: 0, completionRate: 0, topService: "" });
+  const [statsLoading, setStatsLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user) return;
+    setStatsLoading(true);
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+    Promise.all([
+      insforge.database.from("bookings").select("amount").eq("owner_id", user.id).gte("scheduled_at", startOfMonth.toISOString()),
+      insforge.database.from("bookings").select("status, services(name)").eq("owner_id", user.id).gte("scheduled_at", startOfMonth.toISOString()),
+    ]).then(([revenueRes, bookingsRes]) => {
+      const revenue = (revenueRes.data || []).reduce((sum: number, b: any) => sum + (b.amount || 0), 0);
+      const bookings = bookingsRes.data || [];
+      const completed = bookings.filter((b: any) => b.status === "completed").length;
+      const total = bookings.length;
+      const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
+      const serviceCounts: Record<string, number> = {};
+      bookings.forEach((b: any) => {
+        const name = b.services?.name || "Unknown";
+        serviceCounts[name] = (serviceCounts[name] || 0) + 1;
+      });
+      const topService = Object.entries(serviceCounts).sort((a, b) => (b[1] as number) - (a[1] as number))[0]?.[0] || "";
+      setStats({ revenue, count: total, completionRate, topService });
+      setStatsLoading(false);
+    }).catch(() => setStatsLoading(false));
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
@@ -147,8 +175,8 @@ export default function DashboardHome() {
                 <p className="text-sm font-medium text-muted-foreground">Total Revenue</p>
                 <div className="p-2 bg-primary/10 rounded-full text-primary group-hover:bg-primary/20 transition-colors"><DollarSign className="w-4 h-4" /></div>
               </div>
-              <h3 className="text-2xl font-bold leading-none">KES 34,200</h3>
-              <p className="text-xs font-medium mt-2 flex items-center gap-1 text-green-600"><ArrowUpRight className="w-3 h-3" />+12% this month</p>
+              <h3 className="text-2xl font-bold leading-none">KES {stats.revenue.toLocaleString()}</h3>
+              <p className="text-xs font-medium mt-2 flex items-center gap-1 text-muted-foreground">This month</p>
             </CardContent>
           </Card>
 
@@ -158,8 +186,8 @@ export default function DashboardHome() {
                 <p className="text-sm font-medium text-muted-foreground">Bookings This Month</p>
                 <div className="p-2 bg-primary/10 rounded-full text-primary group-hover:bg-primary/20 transition-colors"><CalendarIcon className="w-4 h-4" /></div>
               </div>
-              <h3 className="text-2xl font-bold leading-none">18</h3>
-              <p className="text-xs font-medium mt-2 flex items-center gap-1 text-green-600"><ArrowUpRight className="w-3 h-3" />+4 from last month</p>
+              <h3 className="text-2xl font-bold leading-none">{stats.count}</h3>
+              <p className="text-xs font-medium mt-2 text-muted-foreground">This month</p>
             </CardContent>
           </Card>
 
@@ -169,8 +197,8 @@ export default function DashboardHome() {
                 <p className="text-sm font-medium text-muted-foreground">Completion Rate</p>
                 <div className="p-2 bg-primary/10 rounded-full text-primary group-hover:bg-primary/20 transition-colors"><CalendarCheck className="w-4 h-4" /></div>
               </div>
-              <h3 className="text-2xl font-bold leading-none">94%</h3>
-              <p className="text-xs font-medium mt-2 text-muted-foreground">Industry avg: 88%</p>
+              <h3 className="text-2xl font-bold leading-none">{stats.completionRate}%</h3>
+              <p className="text-xs font-medium mt-2 text-muted-foreground">This month</p>
             </CardContent>
           </Card>
 
@@ -180,8 +208,8 @@ export default function DashboardHome() {
                 <p className="text-sm font-medium text-muted-foreground">Top Service</p>
                 <div className="p-2 bg-primary/10 rounded-full text-primary group-hover:bg-primary/20 transition-colors"><Scissors className="w-4 h-4" /></div>
               </div>
-              <h3 className="text-lg font-bold leading-none truncate">Hair Braiding</h3>
-              <p className="text-xs font-medium mt-2 text-muted-foreground">8 bookings this month</p>
+              <h3 className="text-lg font-bold leading-none truncate">{stats.topService || "No data"}</h3>
+              <p className="text-xs font-medium mt-2 text-muted-foreground">This month</p>
             </CardContent>
           </Card>
         </motion.div>
@@ -557,183 +585,151 @@ export default function DashboardHome() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Revenue Modal ── */}
-      <Dialog open={statModal === "revenue"} onOpenChange={open => { if (!open) setStatModal(null); }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><DollarSign className="w-5 h-5 text-primary" />Revenue Breakdown</DialogTitle>
-            <DialogDescription>Your earnings this month, broken down by service.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                { label: "This month", value: "KES 34,200", up: true, delta: "+12%" },
-                { label: "Last month", value: "KES 30,530", up: null, delta: "" },
-                { label: "This year", value: "KES 341K", up: true, delta: "+28%" },
-              ].map(({ label, value, up, delta }) => (
-                <div key={label} className="p-3 bg-muted/40 rounded-xl text-center">
-                  <p className="text-xs text-muted-foreground mb-1">{label}</p>
-                  <p className="font-bold text-sm">{value}</p>
-                  {delta && <p className={`text-xs font-medium mt-0.5 ${up ? "text-green-600" : "text-red-500"}`}>{delta}</p>}
-                </div>
-              ))}
-            </div>
-            <div className="space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">By service</p>
-              {[
-                { name: "Hair Braiding", amount: 20000, pct: 58 },
-                { name: "Locs Retwist", amount: 7000, pct: 20 },
-                { name: "Beard Trim", amount: 4800, pct: 14 },
-                { name: "Other", amount: 2400, pct: 8 },
-              ].map(s => (
-                <div key={s.name} className="space-y-1">
-                  <div className="flex justify-between text-sm">
-                    <span>{s.name}</span>
-                    <span className="font-semibold">KES {s.amount.toLocaleString()} <span className="text-muted-foreground font-normal text-xs">{s.pct}%</span></span>
-                  </div>
-                  <div className="h-2 bg-muted rounded-full overflow-hidden">
-                    <div className="h-full bg-primary rounded-full" style={{ width: `${s.pct}%` }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setStatModal(null)}>Close</Button>
-            <Button onClick={() => { setStatModal(null); navigate("/analytics"); }}>Full Analytics →</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+       {/* ── Revenue Modal ── */}
+       <Dialog open={statModal === "revenue"} onOpenChange={open => { if (!open) setStatModal(null); }}>
+         <DialogContent className="sm:max-w-md">
+           <DialogHeader>
+             <DialogTitle className="flex items-center gap-2"><DollarSign className="w-5 h-5 text-primary" />Revenue Breakdown</DialogTitle>
+             <DialogDescription>Your earnings this month.</DialogDescription>
+           </DialogHeader>
+           <div className="space-y-4">
+             {statsLoading ? (
+               <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+             ) : (
+               <>
+                 <div className="grid grid-cols-2 gap-3">
+                   <div className="p-3 bg-muted/40 rounded-xl text-center">
+                     <p className="text-xs text-muted-foreground mb-1">This month</p>
+                     <p className="font-bold text-sm">KES {stats.revenue.toLocaleString()}</p>
+                   </div>
+                   <div className="p-3 bg-muted/40 rounded-xl text-center">
+                     <p className="text-xs text-muted-foreground mb-1">Bookings</p>
+                     <p className="font-bold text-sm">{stats.count}</p>
+                   </div>
+                 </div>
+                 {stats.topService && (
+                   <div className="p-3 bg-muted/40 rounded-xl">
+                     <p className="text-xs text-muted-foreground mb-1">Top service</p>
+                     <p className="font-semibold text-sm">{stats.topService}</p>
+                   </div>
+                 )}
+               </>
+             )}
+           </div>
+           <DialogFooter>
+             <Button variant="outline" onClick={() => setStatModal(null)}>Close</Button>
+             <Button onClick={() => { setStatModal(null); navigate("/analytics"); }}>Full Analytics →</Button>
+           </DialogFooter>
+         </DialogContent>
+       </Dialog>
 
-      {/* ── Bookings Modal ── */}
-      <Dialog open={statModal === "bookings"} onOpenChange={open => { if (!open) setStatModal(null); }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><CalendarIcon className="w-5 h-5 text-primary" />Bookings This Month</DialogTitle>
-            <DialogDescription>Status breakdown and trends for April 2026.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                { label: "This month", value: "18", delta: "+4", up: true },
-                { label: "Last month", value: "14", delta: "", up: null },
-                { label: "This year", value: "112", delta: "+22%", up: true },
-              ].map(({ label, value, delta, up }) => (
-                <div key={label} className="p-3 bg-muted/40 rounded-xl text-center">
-                  <p className="text-xs text-muted-foreground mb-1">{label}</p>
-                  <p className="font-bold text-lg">{value}</p>
-                  {delta && <p className={`text-xs font-medium mt-0.5 ${up ? "text-green-600" : "text-red-500"}`}>{delta}</p>}
-                </div>
-              ))}
-            </div>
-            <div className="space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">By status</p>
-              {[
-                { label: "Confirmed", count: 8, pct: 44, color: "bg-blue-500" },
-                { label: "Completed", count: 7, pct: 39, color: "bg-green-500" },
-                { label: "Pending", count: 2, pct: 11, color: "bg-yellow-400" },
-                { label: "Cancelled", count: 1, pct: 6, color: "bg-red-400" },
-              ].map(s => (
-                <div key={s.label} className="flex items-center gap-3 text-sm">
-                  <div className={`w-3 h-3 rounded-full ${s.color} shrink-0`} />
-                  <span className="flex-1">{s.label}</span>
-                  <span className="font-semibold">{s.count}</span>
-                  <div className="w-24 h-2 bg-muted rounded-full overflow-hidden">
-                    <div className={`h-full ${s.color} rounded-full`} style={{ width: `${s.pct}%` }} />
-                  </div>
-                  <span className="text-xs text-muted-foreground w-8 text-right">{s.pct}%</span>
-                </div>
-              ))}
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setStatModal(null)}>Close</Button>
-            <Button onClick={() => { setStatModal(null); navigate("/bookings"); }}>Manage Bookings →</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+       {/* ── Bookings Modal ── */}
+       <Dialog open={statModal === "bookings"} onOpenChange={open => { if (!open) setStatModal(null); }}>
+         <DialogContent className="sm:max-w-md">
+           <DialogHeader>
+             <DialogTitle className="flex items-center gap-2"><CalendarIcon className="w-5 h-5 text-primary" />Bookings This Month</DialogTitle>
+             <DialogDescription>Status breakdown for this month.</DialogDescription>
+           </DialogHeader>
+           <div className="space-y-4">
+             {statsLoading ? (
+               <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+             ) : (
+               <>
+                 <div className="grid grid-cols-2 gap-3">
+                   <div className="p-3 bg-muted/40 rounded-xl text-center">
+                     <p className="text-xs text-muted-foreground mb-1">This month</p>
+                     <p className="font-bold text-lg">{stats.count}</p>
+                   </div>
+                   <div className="p-3 bg-muted/40 rounded-xl text-center">
+                     <p className="text-xs text-muted-foreground mb-1">Completion</p>
+                     <p className="font-bold text-lg">{stats.completionRate}%</p>
+                   </div>
+                 </div>
+               </>
+             )}
+           </div>
+           <DialogFooter>
+             <Button variant="outline" onClick={() => setStatModal(null)}>Close</Button>
+             <Button onClick={() => { setStatModal(null); navigate("/bookings"); }}>Manage Bookings →</Button>
+           </DialogFooter>
+         </DialogContent>
+       </Dialog>
 
-      {/* ── Completion Rate Modal ── */}
-      <Dialog open={statModal === "completion"} onOpenChange={open => { if (!open) setStatModal(null); }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><CalendarCheck className="w-5 h-5 text-primary" />Completion Rate</DialogTitle>
-            <DialogDescription>How well your appointments are going — and where to improve.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="flex items-center justify-center py-2">
-              <div className="relative w-32 h-32">
-                <svg viewBox="0 0 36 36" className="w-32 h-32 -rotate-90">
-                  <circle cx="18" cy="18" r="15.9" fill="none" stroke="#e5e7eb" strokeWidth="3" />
-                  <circle cx="18" cy="18" r="15.9" fill="none" stroke="#0066CC" strokeWidth="3"
-                    strokeDasharray={`${94} ${100 - 94}`} strokeLinecap="round" />
-                </svg>
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-3xl font-bold">94%</span>
-                  <span className="text-xs text-muted-foreground">completed</span>
-                </div>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { label: "Completed", value: "17", color: "text-green-600 bg-green-50" },
-                { label: "No-Shows", value: "1", color: "text-orange-600 bg-orange-50" },
-                { label: "Industry avg.", value: "88%", color: "text-blue-600 bg-blue-50" },
-                { label: "Your streak", value: "14 days", color: "text-purple-600 bg-purple-50" },
-              ].map(({ label, value, color }) => (
-                <div key={label} className={`p-3 rounded-xl text-center ${color}`}>
-                  <p className="text-xs font-medium opacity-70 mb-1">{label}</p>
-                  <p className="font-bold text-lg">{value}</p>
-                </div>
-              ))}
-            </div>
-            <div className="p-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-700">
-              You're performing 6% above the industry average. Keep it up!
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setStatModal(null)}>Close</Button>
-            <Button onClick={() => { setStatModal(null); navigate("/analytics"); }}>Full Analytics →</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+       {/* ── Completion Rate Modal ── */}
+       <Dialog open={statModal === "completion"} onOpenChange={open => { if (!open) setStatModal(null); }}>
+         <DialogContent className="sm:max-w-md">
+           <DialogHeader>
+             <DialogTitle className="flex items-center gap-2"><CalendarCheck className="w-5 h-5 text-primary" />Completion Rate</DialogTitle>
+             <DialogDescription>Your booking completion rate this month.</DialogDescription>
+           </DialogHeader>
+           <div className="space-y-4">
+             {statsLoading ? (
+               <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+             ) : (
+               <>
+                 <div className="flex items-center justify-center py-2">
+                   <div className="relative w-32 h-32">
+                     <svg viewBox="0 0 36 36" className="w-32 h-32 -rotate-90">
+                       <circle cx="18" cy="18" r="15.9" fill="none" stroke="#e5e7eb" strokeWidth="3" />
+                       <circle cx="18" cy="18" r="15.9" fill="none" stroke="#0066CC" strokeWidth="3"
+                         strokeDasharray={`${stats.completionRate} ${100 - stats.completionRate}`} strokeLinecap="round" />
+                     </svg>
+                     <div className="absolute inset-0 flex flex-col items-center justify-center">
+                       <span className="text-3xl font-bold">{stats.completionRate}%</span>
+                       <span className="text-xs text-muted-foreground">completed</span>
+                     </div>
+                   </div>
+                 </div>
+                 <div className="grid grid-cols-2 gap-3">
+                   <div className="p-3 rounded-xl text-center bg-green-50 text-green-600">
+                     <p className="text-xs font-medium opacity-70 mb-1">Completed</p>
+                     <p className="font-bold text-lg">{Math.round(stats.count * stats.completionRate / 100)}</p>
+                   </div>
+                   <div className="p-3 rounded-xl text-center bg-orange-50 text-orange-600">
+                     <p className="text-xs font-medium opacity-70 mb-1">Remaining</p>
+                     <p className="font-bold text-lg">{stats.count - Math.round(stats.count * stats.completionRate / 100)}</p>
+                   </div>
+                 </div>
+               </>
+             )}
+           </div>
+           <DialogFooter>
+             <Button variant="outline" onClick={() => setStatModal(null)}>Close</Button>
+             <Button onClick={() => { setStatModal(null); navigate("/analytics"); }}>Full Analytics →</Button>
+           </DialogFooter>
+         </DialogContent>
+       </Dialog>
 
-      {/* ── Top Service Modal ── */}
-      <Dialog open={statModal === "topservice"} onOpenChange={open => { if (!open) setStatModal(null); }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Scissors className="w-5 h-5 text-primary" />Service Performance</DialogTitle>
-            <DialogDescription>Your services ranked by bookings and revenue this month.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            {[
-              { rank: 1, name: "Hair Braiding", bookings: 8, revenue: "KES 20,000", trend: +18, color: "from-pink-500 to-rose-500" },
-              { rank: 2, name: "Locs Retwist", bookings: 4, revenue: "KES 14,000", trend: +12, color: "from-violet-500 to-purple-500" },
-              { rank: 3, name: "Beard Trim", bookings: 4, revenue: "KES 3,200", trend: -5, color: "from-blue-500 to-cyan-500" },
-              { rank: 4, name: "Haircut & Style", bookings: 2, revenue: "KES 2,000", trend: +7, color: "from-emerald-500 to-teal-500" },
-            ].map(s => (
-              <div key={s.name} className="flex items-center gap-3 p-3 bg-muted/30 rounded-xl">
-                <span className="text-lg font-bold text-muted-foreground w-6 text-center">#{s.rank}</span>
-                <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${s.color} flex items-center justify-center shrink-0`}>
-                  <Scissors className="w-3.5 h-3.5 text-white" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm truncate">{s.name}</p>
-                  <p className="text-xs text-muted-foreground">{s.bookings} bookings · {s.revenue}</p>
-                </div>
-                <span className={`text-xs font-semibold flex items-center gap-0.5 ${s.trend >= 0 ? "text-green-600" : "text-red-500"}`}>
-                  {s.trend >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                  {Math.abs(s.trend)}%
-                </span>
-              </div>
-            ))}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setStatModal(null)}>Close</Button>
-            <Button onClick={() => { setStatModal(null); navigate("/services"); }}>Manage Services →</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+       {/* ── Top Service Modal ── */}
+       <Dialog open={statModal === "topservice"} onOpenChange={open => { if (!open) setStatModal(null); }}>
+         <DialogContent className="sm:max-w-md">
+           <DialogHeader>
+             <DialogTitle className="flex items-center gap-2"><Scissors className="w-5 h-5 text-primary" />Top Service</DialogTitle>
+             <DialogDescription>Your most booked service this month.</DialogDescription>
+           </DialogHeader>
+           <div className="space-y-3">
+             {statsLoading ? (
+               <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+             ) : stats.topService ? (
+               <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-xl">
+                 <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shrink-0">
+                   <Scissors className="w-3.5 h-3.5 text-white" />
+                 </div>
+                 <div className="flex-1 min-w-0">
+                   <p className="font-semibold text-sm truncate">{stats.topService}</p>
+                   <p className="text-xs text-muted-foreground">Top service this month</p>
+                 </div>
+               </div>
+             ) : (
+               <p className="text-center text-muted-foreground py-4">No data yet. Start booking to see your top service!</p>
+             )}
+           </div>
+           <DialogFooter>
+             <Button variant="outline" onClick={() => setStatModal(null)}>Close</Button>
+             <Button onClick={() => { setStatModal(null); navigate("/services"); }}>Manage Services →</Button>
+           </DialogFooter>
+         </DialogContent>
+       </Dialog>
 
     </>
   );

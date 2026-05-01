@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,9 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { UserPlus, MoreHorizontal, Mail, Clock, Crown, Shield, Users, AlertCircle } from "lucide-react";
+import { useAuth } from "@/lib/auth";
+import { insforge } from "@/lib/insforge";
+import { UserPlus, MoreHorizontal, Mail, Clock, Crown, Shield, Users, AlertCircle, Loader2 } from "lucide-react";
 
 type Role = "Owner" | "Admin" | "Staff";
 interface Member {
@@ -28,14 +30,7 @@ interface Member {
   status: "active" | "pending";
 }
 
-const initialMembers: Member[] = [
-  { id: 1, name: "Amina K.", email: "amina@example.com", role: "Owner", avatar: "https://i.pravatar.cc/150?u=amina", joinedDate: "Jan 2024", status: "active" },
-  { id: 2, name: "James O.", email: "james@example.com", role: "Staff", avatar: "https://i.pravatar.cc/150?u=james", joinedDate: "Mar 2024", status: "active" },
-];
-
-const pendingInvites = [
-  { id: 1, email: "grace@example.com", role: "Staff" as Role, sentAt: "2 days ago" },
-];
+type Invite = { id: number; email: string; role: Role; sentAt: string };
 
 const roleConfig: Record<Role, { color: string; icon: React.ElementType }> = {
   Owner: { color: "bg-yellow-100 text-yellow-800 border-yellow-200", icon: Crown },
@@ -44,8 +39,10 @@ const roleConfig: Record<Role, { color: string; icon: React.ElementType }> = {
 };
 
 export default function TeamPage() {
-  const [members, setMembers] = useState(initialMembers);
-  const [invites, setInvites] = useState(pendingInvites);
+  const { user } = useAuth();
+  const [members, setMembers] = useState<Member[]>([]);
+  const [invites, setInvites] = useState<Invite[]>([]);
+  const [loading, setLoading] = useState(true);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<Role>("Staff");
@@ -54,27 +51,65 @@ export default function TeamPage() {
   const totalSeats = 3;
   const usedSeats = members.length;
 
+  useEffect(() => {
+    if (!user) return;
+    setLoading(true);
+    Promise.all([
+      insforge.database.from("team_members").select("*").eq("owner_id", user.id),
+      insforge.database.from("team_invites").select("*").eq("owner_id", user.id).eq("status", "pending"),
+    ]).then(([membersRes, invitesRes]) => {
+      const membersData = (membersRes.data || []).map((m: any) => ({
+        id: m.id,
+        name: m.name || m.email.split("@")[0],
+        email: m.email,
+        role: m.role as Role,
+        avatar: `https://i.pravatar.cc/150?u=${m.email}`,
+        joinedDate: new Date(m.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" }),
+        status: "active" as const,
+      }));
+      const invitesData = (invitesRes.data || []).map((i: any) => ({
+        id: i.id,
+        email: i.email,
+        role: i.role as Role,
+        sentAt: new Date(i.created_at).toLocaleDateString(),
+      }));
+      setMembers(membersData);
+      setInvites(invitesData);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, [user]);
+
   const handleInvite = () => {
     if (!inviteEmail.trim()) { setInviteError("Email is required."); return; }
     if (!/\S+@\S+\.\S+/.test(inviteEmail)) { setInviteError("Please enter a valid email."); return; }
     if (usedSeats >= totalSeats) { setInviteError("Seat limit reached. Upgrade to Pro to add more."); return; }
-    setInvites([...invites, { id: Date.now(), email: inviteEmail, role: inviteRole, sentAt: "just now" }]);
-    setInviteEmail("");
-    setInviteRole("Staff");
-    setInviteError("");
-    setInviteOpen(false);
+    insforge.database.from("team_invites").insert({
+      email: inviteEmail,
+      role: inviteRole,
+      owner_id: user?.id,
+      status: "pending",
+    }).then(() => {
+      setInvites([...invites, { id: Date.now(), email: inviteEmail, role: inviteRole, sentAt: "just now" }]);
+      setInviteEmail("");
+      setInviteRole("Staff");
+      setInviteError("");
+      setInviteOpen(false);
+    });
   };
 
   const changeRole = (id: number, role: Role) => {
     setMembers(members.map(m => m.id === id ? { ...m, role } : m));
+    insforge.database.from("team_members").update({ role }).eq("id", id);
   };
 
   const removeMember = (id: number) => {
     setMembers(members.filter(m => m.id !== id));
+    insforge.database.from("team_members").delete().eq("id", id);
   };
 
   const cancelInvite = (id: number) => {
     setInvites(invites.filter(i => i.id !== id));
+    insforge.database.from("team_invites").delete().eq("id", id);
   };
 
   return (
@@ -110,29 +145,32 @@ export default function TeamPage() {
 
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
         <h2 className="text-lg font-semibold">Active Members</h2>
-        <Card className="shadow-sm overflow-hidden">
-          <div className="divide-y">
-            {members.map((member) => {
-              const RoleIcon = roleConfig[member.role].icon;
-              return (
-                <div key={member.id} className="p-5 flex items-center gap-4 hover:bg-muted/30 transition-colors">
-                  <Avatar className="h-11 w-11">
-                    <AvatarImage src={member.avatar} />
-                    <AvatarFallback className="bg-primary/10 text-primary font-semibold">
-                      {member.name.split(" ").map(n => n[0]).join("")}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-semibold truncate">{member.name}</p>
-                      <Badge variant="outline" className={`text-xs ${roleConfig[member.role].color}`}>
-                        <RoleIcon className="w-3 h-3 mr-1" />
-                        {member.role}
-                      </Badge>
+        {loading ? (
+          <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
+        ) : members.length > 0 ? (
+          <Card className="shadow-sm overflow-hidden">
+            <div className="divide-y">
+              {members.map((member) => {
+                const RoleIcon = roleConfig[member.role].icon;
+                return (
+                  <div key={member.id} className="p-5 flex items-center gap-4 hover:bg-muted/30 transition-colors">
+                    <Avatar className="h-11 w-11">
+                      <AvatarImage src={member.avatar} />
+                      <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                        {member.name.split(" ").map(n => n[0]).join("")}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-semibold truncate">{member.name}</p>
+                        <Badge variant="outline" className={`text-xs ${roleConfig[member.role].color}`}>
+                          <RoleIcon className="w-3 h-3 mr-1" />
+                          {member.role}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground truncate">{member.email}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Joined {member.joinedDate}</p>
                     </div>
-                    <p className="text-sm text-muted-foreground truncate">{member.email}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">Joined {member.joinedDate}</p>
-                  </div>
                   {member.role !== "Owner" && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -157,6 +195,14 @@ export default function TeamPage() {
             })}
           </div>
         </Card>
+      ) : (
+        <Card className="shadow-sm">
+          <CardContent className="p-10 text-center">
+            <Users className="w-8 h-8 mx-auto mb-2 text-muted-foreground opacity-20" />
+            <p className="text-muted-foreground">No team members yet. Invite someone to get started!</p>
+          </CardContent>
+        </Card>
+      )}
       </motion.div>
 
       {invites.length > 0 && (
