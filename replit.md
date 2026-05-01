@@ -12,17 +12,18 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **TypeScript version**: 5.9
 - **Frontend**: React 19 + Vite 7, Tailwind CSS, shadcn/ui, wouter (routing)
 - **API framework**: Express 5
-- **Database**: Supabase (PostgreSQL), schema at `artifacts/api-server/src/lib/supabase-schema.sql`
+- **Database**: Insforge (PostgreSQL), schema at `artifacts/api-server/src/lib/supabase-schema.sql`, client SDK `@insforge/sdk`
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
 - **API codegen**: Orval (from OpenAPI spec)
 - **Build**: esbuild (CJS bundle)
 
 ## Required Environment Variables
 
-- `VITE_SUPABASE_URL` — Supabase project URL (frontend)
-- `VITE_SUPABASE_ANON_KEY` — Supabase anon key (frontend)
-- `SUPABASE_URL` — Supabase project URL (API server)
-- `SUPABASE_SERVICE_ROLE_KEY` — Supabase service role key (API server)
+- `VITE_INSFORGE_URL` — Insforge project URL (frontend)
+- `VITE_INSFORGE_ANON_KEY` — Insforge anon key (frontend)
+- `INSFORGE_URL` — Insforge project URL (API server)
+- `INSFORGE_API_KEY` — Insforge API key (API server)
+- `DATABASE_URL` — Direct PostgreSQL connection URL (for migrations)
 
 ## Workflows
 

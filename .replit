@@ -61,3 +61,14 @@ expertMode = true
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 20000
+
+[userenv]
+
+[userenv.shared]
+ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3OC0xMjM0LTU2NzgtOTBhYi1jZGVmMTIzNDU2NzgiLCJlbWFpbCI6ImFub25AaW5zZm9yZ2UuY29tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc2MTk4NjV9.hwsT9odwyku8PDLOAa_zd8jOZQiNZE_tAgJpKZZXmdg"
+"Project Url" = "https://q777uqjk.us-east.insforge.app"
+"API Key" = "ik_197348a717c8d12ac52dda7880e2cdca"
+VITE_INSFORGE_URL = "https://q777uqjk.us-east.insforge.app"
+VITE_INSFORGE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3OC0xMjM0LTU2NzgtOTBhYi1jZGVmMTIzNDU2NzgiLCJlbWFpbCI6ImFub25AaW5zZm9yZ2UuY29tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc2MTk4NjV9.hwsT9odwyku8PDLOAa_zd8jOZQiNZE_tAgJpKZZXmdg"
+INSFORGE_URL = "https://q777uqjk.us-east.insforge.app"
+INSFORGE_API_KEY = "ik_197348a717c8d12ac52dda7880e2cdca"

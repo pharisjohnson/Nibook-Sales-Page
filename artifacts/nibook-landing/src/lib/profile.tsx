@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { supabase } from "./supabase";
+import { insforge } from "./insforge";
 import { useAuth } from "./auth";
 
 export interface Profile {
@@ -34,7 +34,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user) { setProfile(null); return; }
     setLoading(true);
-    supabase
+    insforge.database
       .from("profiles")
       .select("*")
       .eq("id", user.id)
@@ -47,7 +47,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
   async function updateProfile(updates: Partial<Omit<Profile, "id" | "created_at">>) {
     if (!user) return { error: "Not authenticated" };
-    const { error } = await supabase
+    const { error } = await insforge.database
       .from("profiles")
       .update(updates)
       .eq("id", user.id);

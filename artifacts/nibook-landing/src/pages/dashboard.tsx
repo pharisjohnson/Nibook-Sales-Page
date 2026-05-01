@@ -16,7 +16,7 @@ import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { useProfile } from "@/lib/profile";
-import { supabase } from "@/lib/supabase";
+import { insforge } from "@/lib/insforge";
 
 type BookingStatus = "Confirmed" | "Pending" | "Cancelled";
 type Booking = {
@@ -59,7 +59,7 @@ export default function DashboardHome() {
   useEffect(() => {
     if (!user) return;
     setBookingsLoading(true);
-    supabase
+    insforge.database
       .from("bookings")
       .select("*, services(name)")
       .eq("owner_id", user.id)
