@@ -1,0 +1,285 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { checkInVisitor } from '@/app/actions/visitors'
+import { createClient } from '@/lib/supabase/client'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ArrowRight, ArrowLeft, Check, Loader2 } from 'lucide-react'
+
+const STEPS = ['name', 'contact', 'host', 'purpose', 'consent', 'confirm'] as const
+type Step = typeof STEPS[number]
+
+export default function VisitorCheckIn() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const token = searchParams.get('token')
+  const supabase = createClient()
+
+  const [step, setStep] = useState<Step>('name')
+  const [hosts, setHosts] = useState<Array<{ id: string; full_name: string }>>([])
+  const [loading, setLoading] = useState(false)
+  const [formData, setFormData] = useState({
+    full_name: '',
+    email: '',
+    phone: '',
+    company: '',
+    host_id: '',
+    purpose: '',
+    consent_marketing: false,
+    consent_data_sharing: false,
+  })
+  const [result, setResult] = useState<{ badgeNumber: string; hostName: string } | null>(null)
+
+  useEffect(() => {
+    // Fetch hosts
+    supabase
+      .from('profiles')
+      .select('id, full_name')
+      .eq('role', 'host')
+      .then(({ data }) => {
+        if (data) setHosts(data)
+      })
+
+    // If pre-reg token, fetch appointment data
+    if (token) {
+      supabase
+        .from('appointments')
+        .select('*')
+        .eq('pre_reg_token', token)
+        .single()
+        .then(({ data }) => {
+          if (data) {
+            setFormData(prev => ({
+              ...prev,
+              full_name: data.visitor_name,
+              email: data.visitor_email,
+              phone: data.visitor_phone || '',
+              host_id: data.host_id || '',
+            }))
+          }
+        })
+    }
+  }, [token])
+
+  const updateField = (field: string, value: string | boolean) => {
+    setFormData(prev => ({ ...prev, [field]: value }))
+  }
+
+  const currentStepIndex = STEPS.indexOf(step)
+
+  const handleNext = () => {
+    if (currentStepIndex < STEPS.length - 1) {
+      setStep(STEPS[currentStepIndex + 1])
+    }
+  }
+
+  const handleBack = () => {
+    if (currentStepIndex > 0) {
+      setStep(STEPS[currentStepIndex - 1])
+    }
+  }
+
+  const handleSubmit = async () => {
+    setLoading(true)
+    try {
+      const form = new FormData()
+      Object.entries(formData).forEach(([key, value]) => {
+        form.append(key, String(value))
+      })
+      
+      const { visitor, badgeNumber } = await checkInVisitor(form)
+      const host = hosts.find(h => h.id === formData.host_id)
+      
+      setResult({
+        badgeNumber,
+        hostName: host?.full_name || 'your host',
+      })
+      setStep('confirm')
+    } catch (error) {
+      console.error(error)
+      alert('Something went wrong. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const renderStep = () => {
+    switch (step) {
+      case 'name':
+        return (
+          <div className="space-y-6">
+            <h2 className="text-3xl font-bold text-white text-center">What's your name?</h2>
+            <Input
+              value={formData.full_name}
+              onChange={(e) => updateField('full_name', e.target.value)}
+              placeholder="Full Name"
+              className="h-16 text-xl bg-white/10 border-white/20 text-white placeholder:text-slate-400"
+              autoFocus
+            />
+            <Button
+              onClick={handleNext}
+              disabled={!formData.full_name}
+              className="w-full h-16 text-xl bg-blue-500 hover:bg-blue-600"
+            >
+              Continue <ArrowRight className="ml-2" />
+            </Button>
+          </div>
+        )
+
+      case 'contact':
+        return (
+          <div className="space-y-6">
+            <h2 className="text-3xl font-bold text-white text-center">Contact Information</h2>
+            <div className="space-y-4">
+              <div>
+                <Label className="text-white text-lg mb-2 block">Email</Label>
+                <Input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => updateField('email', e.target.value)}
+                  placeholder="email@example.com"
+                  className="h-16 text-xl bg-white/10 border-white/20 text-white placeholder:text-slate-400"
+                />
+              </div>
+              <div>
+                <Label className="text-white text-lg mb-2 block">Phone</Label>
+                <Input
+                  type="tel"
+                  value={formData.phone}
+                  onChange={(e) => updateField('phone', e.target.value)}
+                  placeholder="(555) 123-4567"
+                  className="h-16 text-xl bg-white/10 border-white/20 text-white placeholder:text-slate-400"
+                />
+              </div>
+              <div>
+                <Label className="text-white text-lg mb-2 block">Company (Optional)</Label>
+                <Input
+                  value={formData.company}
+                  onChange={(e) => updateField('company', e.target.value)}
+                  placeholder="Your Company"
+                  className="h-16 text-xl bg-white/10 border-white/20 text-white placeholder:text-slate-400"
+                />
+              </div>
+            </div>
+            <div className="flex gap-4">
+              <Button onClick={handleBack} variant="outline" className="flex-1 h-16 text-xl border-white/20 text-white hover:bg-white/10">
+                <ArrowLeft className="mr-2" /> Back
+              </Button>
+              <Button
+                onClick={handleNext}
+                disabled={!formData.email}
+                className="flex-1 h-16 text-xl bg-blue-500 hover:bg-blue-600"
+              >
+                Continue <ArrowRight className="ml-2" />
+              </Button>
+            </div>
+          </div>
+        )
+
+      case 'host':
+        return (
+          <div className="space-y-6">
+            <h2 className="text-3xl font-bold text-white text-center">Who are you visiting?</h2>
+            <Select value={formData.host_id} onValueChange={(value) => updateField('host_id', value)}>
+              <SelectTrigger className="h-16 text-xl bg-white/10 border-white/20 text-white">
+                <SelectValue placeholder="Select a host" />
+              </SelectTrigger>
+              <SelectContent className="bg-slate-800 border-white/20">
+                {hosts.map((host) => (
+                  <SelectItem key={host.id} value={host.id} className="text-white text-lg focus:bg-white/10 focus:text-white">
+                    {host.full_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="flex gap-4">
+              <Button onClick={handleBack} variant="outline" className="flex-1 h-16 text-xl border-white/20 text-white hover:bg-white/10">
+                <ArrowLeft className="mr-2" /> Back
+              </Button>
+              <Button
+                onClick={handleNext}
+                disabled={!formData.host_id}
+                className="flex-1 h-16 text-xl bg-blue-500 hover:bg-blue-600"
+              >
+                Continue <ArrowRight className="ml-2" />
+              </Button>
+            </div>
+          </div>
+        )
+
+      case 'purpose':
+        return (
+          <div className="space-y-6">
+            <h2 className="text-3xl font-bold text-white text-center">Purpose of Visit</h2>
+            <Select value={formData.purpose} onValueChange={(value) => updateField('purpose', value)}>
+              <SelectTrigger className="h-16 text-xl bg-white/10 border-white/20 text-white">
+                <SelectValue placeholder="Select purpose" />
+              </SelectTrigger>
+              <SelectContent className="bg-slate-800 border-white/20">
+                <SelectItem value="meeting" className="text-white text-lg">Business Meeting</SelectItem>
+                <SelectItem value="interview" className="text-white text-lg">Interview</SelectItem>
+                <SelectItem value="delivery" className="text-white text-lg">Delivery</SelectItem>
+                <SelectItem value="maintenance" className="text-white text-lg">Maintenance</SelectItem>
+                <SelectItem value="personal" className="text-white text-lg">Personal Visit</SelectItem>
+                <SelectItem value="other" className="text-white text-lg">Other</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="flex gap-4">
+              <Button onClick={handleBack} variant="outline" className="flex-1 h-16 text-xl border-white/20 text-white hover:bg-white/10">
+                <ArrowLeft className="mr-2" /> Back
+              </Button>
+              <Button
+                onClick={handleNext}
+                disabled={!formData.purpose}
+                className="flex-1 h-16 text-xl bg-blue-500 hover:bg-blue-600"
+              >
+                Continue <ArrowRight className="ml-2" />
+              </Button>
+            </div>
+          </div>
+        )
+
+      case 'consent':
+        return (
+          <div className="space-y-6">
+            <h2 className="text-3xl font-bold text-white text-center">Consent</h2>
+            <p className="text-slate-300 text-center text-lg">Please review and select your preferences</p>
+            
+            <div className="space-y-4 bg-white/5 p-6 rounded-xl">
+              <div className="flex items-start space-x-3">
+                <Checkbox
+                  id="marketing"
+                  checked={formData.consent_marketing}
+                  onCheckedChange={(checked) => updateField('consent_marketing', checked === true)}
+                  className="mt-1 border-white/40 data-[state=checked]:bg-blue-500"
+                />
+                <Label htmlFor="marketing" className="text-white text-lg leading-relaxed cursor-pointer">
+                  I consent to receive marketing communications (optional)
+                </Label>
+              </div>
+              
+              <div className="flex items-start space-x-3">
+                <Checkbox
+                  id="data_sharing"
+                  checked={formData.consent_data_sharing}
+                  onCheckedChange={(checked) => updateField('consent_data_sharing', checked === true)}
+                  className="mt-1 border-white/40 data-[state=checked]:bg-blue-500"
+                />
+                <Label htmlFor="data_sharing" className="text-white text-lg leading-relaxed cursor-pointer">
+                  I consent to sharing my data with relevant parties (optional)
+                </Label>
+              </div>
+            </div>
+
+            <div className="flex gap-4">
+              <Button onClick={handleBack} variant="outline" className="flex-1 h-16 text-xl border-white/20 text-white hover:bg-white/10">
+                <ArrowLeft className="mr-2" /> Back
+              </Button>
+              <Button
+                onClick={handleNext}
+                className="flex-
