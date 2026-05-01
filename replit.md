@@ -10,11 +10,30 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **Node.js version**: 24
 - **Package manager**: pnpm
 - **TypeScript version**: 5.9
+- **Frontend**: React 19 + Vite 7, Tailwind CSS, shadcn/ui, wouter (routing)
 - **API framework**: Express 5
-- **Database**: PostgreSQL + Drizzle ORM
+- **Database**: Supabase (PostgreSQL), schema at `artifacts/api-server/src/lib/supabase-schema.sql`
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
 - **API codegen**: Orval (from OpenAPI spec)
 - **Build**: esbuild (CJS bundle)
+
+## Required Environment Variables
+
+- `VITE_SUPABASE_URL` — Supabase project URL (frontend)
+- `VITE_SUPABASE_ANON_KEY` — Supabase anon key (frontend)
+- `SUPABASE_URL` — Supabase project URL (API server)
+- `SUPABASE_SERVICE_ROLE_KEY` — Supabase service role key (API server)
+
+## Workflows
+
+- **Start application** — `PORT=22183 BASE_PATH=/ pnpm --filter @workspace/nibook-landing run dev` (port 22183)
+- **API Server** — `PORT=8080 pnpm --filter @workspace/api-server run dev` (port 8080)
+
+## Features
+
+- **Visitor Check-In** (`/check-in`) — Multi-step walk-in kiosk flow. Collects name, contact, host, purpose, and consent. Calls `POST /api/visitors/check-in` and returns a badge number.
+  - Supports pre-registration tokens via `?token=<pre_reg_token>` query param (looks up `appointments` table)
+- **Payments** — PayHero M-Pesa STK push integration (`POST /api/payments/initiate`)
 
 ## Structure
 

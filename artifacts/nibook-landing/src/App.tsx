@@ -10,6 +10,8 @@ import BookingStorePage from "@/pages/booking-store";
 import WaitlistPage from "@/pages/waitlist";
 import OnboardingPage from "@/pages/onboarding";
 
+import VisitorCheckIn from "@/pages/visitor-checkin";
+
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { useAuth } from "@/lib/auth";
 import DashboardHome from "@/pages/dashboard";
@@ -44,6 +46,7 @@ function Router() {
       <Route path="/book/:slug" component={BookingStorePage} />
       <Route path="/waitlist" component={WaitlistPage} />
       <Route path="/onboarding" component={OnboardingPage} />
+      <Route path="/check-in" component={VisitorCheckIn} />
 
       <Route path="/dashboard">
         <ProtectedDashboard><DashboardHome /></ProtectedDashboard>
