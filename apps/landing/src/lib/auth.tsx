@@ -36,9 +36,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (data?.user) {
       setUser(data.user);
       // Create a profile row keyed to this user's ID
+      const slug = businessName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
       await insforge.database
         .from("profiles")
-        .insert({ id: data.user.id, user_id: data.user.id, business_name: businessName });
+        .insert({ id: data.user.id, business_name: businessName, slug });
     }
 
     return { error: null };

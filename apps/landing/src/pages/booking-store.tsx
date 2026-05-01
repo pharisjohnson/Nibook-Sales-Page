@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { insforge } from "@/lib/insforge";
 import {
   MapPin, Clock, Star, Phone, MessageSquare, ChevronRight,
   Calendar, Scissors, Check, ArrowLeft, Share2, Heart,
@@ -23,8 +24,8 @@ const business = {
   about: "Premier hair braiding and beauty studio in Nairobi. Serving clients for over 8 years with professional, caring service. Specialising in African hair braiding, locs, and natural hair care.",
   hours: "Mon–Sat: 8:00 AM – 7:00 PM",
   coverGradient: "from-pink-500 via-rose-500 to-orange-400",
-  cover_url: "",   // populated from profile.cover_url
-  logo_url: "",    // populated from profile.logo_url
+  cover_url: "",
+  logo_url: "",
 };
 
 const services = [
@@ -33,12 +34,6 @@ const services = [
   { id: 3, name: "Locs Retwist", price: 3500, duration: 180, description: "Starter locs and retwisting for existing locs", popular: true, color: "from-violet-500 to-purple-500" },
   { id: 4, name: "Haircut & Style", price: 1000, duration: 45, description: "Cut, wash and blow-dry styling", popular: false, color: "from-emerald-500 to-teal-500" },
   { id: 5, name: "Deep Conditioning", price: 1500, duration: 60, description: "Protein and moisture treatment for hair health", popular: false, color: "from-amber-500 to-orange-500" },
-];
-
-const reviews = [
-  { id: 1, name: "Grace M.", initials: "GM", rating: 5, date: "2 days ago", text: "Absolutely love my braids! Amina is so skilled and patient. Will definitely be back." },
-  { id: 2, name: "James O.", initials: "JO", rating: 5, date: "1 week ago", text: "Best beard trim I've gotten in Nairobi. Clean, precise, and the price is very fair." },
-  { id: 3, name: "Fatuma A.", initials: "FA", rating: 4, date: "2 weeks ago", text: "Great service, very professional. My locs look amazing. Booking online was super easy." },
 ];
 
 const timeSlots = ["9:00 AM", "10:00 AM", "11:00 AM", "1:00 PM", "2:00 PM", "3:00 PM", "4:00 PM"];
@@ -55,9 +50,30 @@ export default function BookingStorePage() {
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
   const [liked, setLiked] = useState(false);
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [showReviewForm, setShowReviewForm] = useState(false);
+  const [reviewerName, setReviewerName] = useState("");
+  const [newRating, setNewRating] = useState(0);
+  const [newReviewText, setNewReviewText] = useState("");
+  const [hoverRating, setHoverRating] = useState(0);
+  const [loading, setLoading] = useState(true);
 
   const coverUrl = business.cover_url;
   const logoUrl = business.logo_url;
+
+  useEffect(() => {
+    fetchReviews();
+  }, []);
+
+  const fetchReviews = async () => {
+    setLoading(true);
+    const { data, error } = await insforge.database
+      .from('reviews')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (data) setReviews(data);
+    setLoading(false);
+  };
 
   const openBooking = (service: typeof services[0]) => {
     setSelectedService(service);
@@ -78,6 +94,30 @@ export default function BookingStorePage() {
       description: `Your ${selectedService?.name} appointment has been booked. Check WhatsApp for confirmation.`,
     });
     setSelectedService(null);
+  };
+
+  const handleSubmitReview = async () => {
+    if (!reviewerName.trim() || newRating === 0 || !newReviewText.trim()) return;
+    const { data, error } = await insforge.database
+      .from('reviews')
+      .insert([{
+        business_id: business.slug,
+        name: reviewerName,
+        initials: getInitials(reviewerName),
+        rating: newRating,
+        text: newReviewText,
+      }])
+      .select();
+    if (data) {
+      setReviews([data[0], ...reviews]);
+      setReviewerName("");
+      setNewRating(0);
+      setNewReviewText("");
+      setShowReviewForm(false);
+      toast({ title: "Review submitted!", description: "Thank you for your feedback." });
+    } else {
+      toast({ title: "Error submitting review", description: error?.message });
+    }
   };
 
   return (
@@ -112,40 +152,28 @@ export default function BookingStorePage() {
 
       {/* ── HERO ── */}
       <div className="relative">
-        {/* Cover */}
         <div className="relative h-64 overflow-hidden">
           {coverUrl ? (
-            <img
-              src={coverUrl}
-              alt="Business cover"
-              className="w-full h-full object-cover"
-            />
+            <img src={coverUrl} alt="Business cover" className="w-full h-full object-cover" />
           ) : (
             <div className={`w-full h-full bg-gradient-to-br ${business.coverGradient}`} />
           )}
-          {/* Dark overlay for contrast */}
           <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/5 to-black/40" />
         </div>
 
-        {/* Business profile row — overlaps the cover */}
         <div className="max-w-2xl mx-auto px-4">
           <div className="flex items-end gap-4 -mt-12 mb-4 relative z-10">
-            {/* Logo */}
             <div className="shrink-0">
               <div className="w-24 h-24 rounded-2xl border-4 border-white shadow-xl overflow-hidden">
                 {logoUrl ? (
                   <img src={logoUrl} alt="Business logo" className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center">
-                    <span className="text-white text-2xl font-bold">
-                      {getInitials(business.name)}
-                    </span>
+                    <span className="text-white text-2xl font-bold">{getInitials(business.name)}</span>
                   </div>
                 )}
               </div>
             </div>
-
-            {/* Name + quick stats */}
             <div className="pb-1 flex-1 min-w-0">
               <h1 className="text-xl font-bold text-foreground leading-tight truncate">{business.name}</h1>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
@@ -161,7 +189,6 @@ export default function BookingStorePage() {
             </div>
           </div>
 
-          {/* Details card */}
           <div className="bg-white border border-border rounded-2xl p-4 mb-5 shadow-sm">
             <p className="text-sm text-muted-foreground leading-relaxed mb-3">{business.about}</p>
             <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-muted-foreground">
@@ -177,7 +204,6 @@ export default function BookingStorePage() {
             </div>
           </div>
 
-          {/* Services */}
           <div className="mb-8">
             <h2 className="text-base font-bold mb-3">Services</h2>
             <div className="space-y-2.5">
@@ -196,9 +222,7 @@ export default function BookingStorePage() {
                     <div className="flex items-center gap-1.5">
                       <p className="font-semibold text-sm leading-tight">{service.name}</p>
                       {service.popular && (
-                        <span className="text-[10px] px-1.5 py-0.5 bg-amber-50 text-amber-600 border border-amber-200 rounded-full font-medium">
-                          Popular
-                        </span>
+                        <span className="text-[10px] px-1.5 py-0.5 bg-amber-50 text-amber-600 border border-amber-200 rounded-full font-medium">Popular</span>
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{service.description}</p>
@@ -217,7 +241,6 @@ export default function BookingStorePage() {
             </div>
           </div>
 
-          {/* Reviews */}
           <div className="mb-12">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-base font-bold">Reviews</h2>
@@ -227,45 +250,84 @@ export default function BookingStorePage() {
                 <span className="text-xs text-muted-foreground ml-0.5">· {business.reviewCount} reviews</span>
               </div>
             </div>
-            <div className="space-y-2.5">
-              {reviews.map((review) => (
-                <div key={review.id} className="p-4 bg-white border border-border rounded-2xl">
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold shrink-0">
-                      {review.initials}
+            {loading ? (
+              <p className="text-sm text-muted-foreground">Loading reviews...</p>
+            ) : (
+              <div className="space-y-2.5">
+                {reviews.map((review) => (
+                  <div key={review.id} className="p-4 bg-white border border-border rounded-2xl">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold shrink-0">
+                        {review.initials}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold leading-tight">{review.name}</p>
+                        <p className="text-xs text-muted-foreground">{new Date(review.created_at).toLocaleDateString()}</p>
+                      </div>
+                      <div className="flex shrink-0">
+                        {Array.from({ length: review.rating }).map((_, i) => (
+                          <Star key={i} className="w-3 h-3 fill-amber-400 text-amber-400" />
+                        ))}
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold leading-tight">{review.name}</p>
-                      <p className="text-xs text-muted-foreground">{review.date}</p>
-                    </div>
-                    <div className="flex shrink-0">
-                      {Array.from({ length: review.rating }).map((_, i) => (
-                        <Star key={i} className="w-3 h-3 fill-amber-400 text-amber-400" />
-                      ))}
-                    </div>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{review.text}</p>
                   </div>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{review.text}</p>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="mb-12">
+            {!showReviewForm ? (
+              <Button variant="outline" className="w-full" onClick={() => setShowReviewForm(true)}>
+                Leave a Review
+              </Button>
+            ) : (
+              <div className="bg-white border border-border rounded-2xl p-4 space-y-4">
+                <h3 className="font-semibold text-sm">Write a Review</h3>
+                <div className="space-y-1.5">
+                  <Label>Your name</Label>
+                  <Input placeholder="e.g. Grace Mwangi" value={reviewerName} onChange={e => setReviewerName(e.target.value)} />
                 </div>
-              ))}
-            </div>
+                <div className="space-y-1.5">
+                  <Label>Rating</Label>
+                  <div className="flex gap-1">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button key={star} type="button" onClick={() => setNewRating(star)} onMouseEnter={() => setHoverRating(star)} onMouseLeave={() => setHoverRating(0)}>
+                        <Star className={`w-5 h-5 ${star <= (hoverRating || newRating) ? "fill-amber-400 text-amber-400" : "text-muted-foreground"}`} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Your review</Label>
+                  <textarea
+                    className="w-full border border-border rounded-lg p-2 text-sm min-h-[80px] resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    placeholder="Share your experience..."
+                    value={newReviewText}
+                    onChange={e => setNewReviewText(e.target.value)}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" className="flex-1" onClick={() => { setShowReviewForm(false); setNewRating(0); setNewReviewText(""); setReviewerName(""); }}>Cancel</Button>
+                  <Button className="flex-1" disabled={!reviewerName.trim() || newRating === 0 || !newReviewText.trim()} onClick={handleSubmitReview}>Submit Review</Button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Booking dialog */}
       <Dialog open={!!selectedService} onOpenChange={open => { if (!open) setSelectedService(null); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>
-              {step === "confirm" ? "Booking Confirmed!" : `Book: ${selectedService?.name}`}
-            </DialogTitle>
+            <DialogTitle>{step === "confirm" ? "Booking Confirmed!" : `Book: ${selectedService?.name}`}</DialogTitle>
             <DialogDescription>
               {step === "pick-time" && "Choose a time that works for you."}
               {step === "details" && "Enter your details to complete the booking."}
               {step === "confirm" && "We'll send a WhatsApp confirmation shortly."}
             </DialogDescription>
           </DialogHeader>
-
           {step === "confirm" ? (
             <div className="text-center py-4 space-y-4">
               <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
@@ -295,23 +357,13 @@ export default function BookingStorePage() {
                 <p className="text-sm font-medium mb-2">Available times</p>
                 <div className="grid grid-cols-3 gap-2">
                   {timeSlots.map((time) => (
-                    <button
-                      key={time}
-                      onClick={() => setSelectedTime(time)}
-                      className={`py-2 px-3 rounded-lg text-sm font-medium border transition-all ${
-                        selectedTime === time
-                          ? "bg-primary text-white border-primary"
-                          : "bg-white border-border hover:border-primary/50"
-                      }`}
-                    >
+                    <button key={time} onClick={() => setSelectedTime(time)} className={`py-2 px-3 rounded-lg text-sm font-medium border transition-all ${selectedTime === time ? "bg-primary text-white border-primary" : "bg-white border-border hover:border-primary/50"}`}>
                       {time}
                     </button>
                   ))}
                 </div>
               </div>
-              <Button className="w-full" disabled={!selectedTime} onClick={() => setStep("details")}>
-                Continue
-              </Button>
+              <Button className="w-full" disabled={!selectedTime} onClick={() => setStep("details")}>Continue</Button>
             </div>
           ) : (
             <div className="space-y-4">
@@ -330,9 +382,7 @@ export default function BookingStorePage() {
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" className="flex-1" onClick={() => setStep("pick-time")}>Back</Button>
-                <Button className="flex-1" disabled={!clientName.trim() || !clientPhone.trim()} onClick={handleConfirm}>
-                  Confirm Booking
-                </Button>
+                <Button className="flex-1" disabled={!clientName.trim() || !clientPhone.trim()} onClick={handleConfirm}>Confirm Booking</Button>
               </div>
             </div>
           )}
