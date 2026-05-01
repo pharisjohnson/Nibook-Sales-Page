@@ -31,8 +31,11 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 
 ## Features
 
-- **Visitor Check-In** (`/check-in`) — Multi-step walk-in kiosk flow. Collects name, contact, host, purpose, and consent. Calls `POST /api/visitors/check-in` and returns a badge number.
-  - Supports pre-registration tokens via `?token=<pre_reg_token>` query param (looks up `appointments` table)
+Nibook helps service providers stop chasing clients. Key features:
+- **Public Booking Page** (`/book/:slug`) — Clients can browse services and book appointments
+- **Business Directory** (`/directory`) — Discover service providers
+- **Dashboard** (`/dashboard`) — Manage bookings, services, availability, team, and analytics
+- **Onboarding** (`/onboarding`) — Set up business profile and services
 - **Payments** — PayHero M-Pesa STK push integration (`POST /api/payments/initiate`)
 
 ## Structure
