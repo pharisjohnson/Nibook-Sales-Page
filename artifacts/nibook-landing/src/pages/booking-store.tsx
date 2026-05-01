@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -56,21 +56,8 @@ export default function BookingStorePage() {
   const [clientPhone, setClientPhone] = useState("");
   const [liked, setLiked] = useState(false);
 
-  // Local state for demo: simulate user-uploaded cover/logo
-  const [coverUrl, setCoverUrl] = useState(business.cover_url);
-  const [logoUrl, setLogoUrl] = useState(business.logo_url);
-  const coverInputRef = useRef<HTMLInputElement>(null);
-  const logoInputRef = useRef<HTMLInputElement>(null);
-
-  const handleCoverUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) setCoverUrl(URL.createObjectURL(file));
-  };
-
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) setLogoUrl(URL.createObjectURL(file));
-  };
+  const coverUrl = business.cover_url;
+  const logoUrl = business.logo_url;
 
   const openBooking = (service: typeof services[0]) => {
     setSelectedService(service);
@@ -138,30 +125,14 @@ export default function BookingStorePage() {
           )}
           {/* Dark overlay for contrast */}
           <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/5 to-black/40" />
-
-          {/* Cover upload button (demo — replace with actual upload in production) */}
-          <button
-            onClick={() => coverInputRef.current?.click()}
-            className="absolute top-3 right-3 bg-black/40 hover:bg-black/60 text-white text-xs px-3 py-1.5 rounded-full backdrop-blur-sm transition-colors flex items-center gap-1.5"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            {coverUrl ? "Change cover" : "Add cover"}
-          </button>
-          <input ref={coverInputRef} type="file" accept="image/*" className="hidden" onChange={handleCoverUpload} />
         </div>
 
         {/* Business profile row — overlaps the cover */}
         <div className="max-w-2xl mx-auto px-4">
           <div className="flex items-end gap-4 -mt-12 mb-4 relative z-10">
             {/* Logo */}
-            <div className="relative shrink-0">
-              <div
-                className="w-24 h-24 rounded-2xl border-4 border-white shadow-xl overflow-hidden cursor-pointer"
-                onClick={() => logoInputRef.current?.click()}
-              >
+            <div className="shrink-0">
+              <div className="w-24 h-24 rounded-2xl border-4 border-white shadow-xl overflow-hidden">
                 {logoUrl ? (
                   <img src={logoUrl} alt="Business logo" className="w-full h-full object-cover" />
                 ) : (
@@ -172,17 +143,6 @@ export default function BookingStorePage() {
                   </div>
                 )}
               </div>
-              {/* Logo upload indicator */}
-              <button
-                onClick={() => logoInputRef.current?.click()}
-                className="absolute -bottom-1 -right-1 w-7 h-7 bg-primary text-white rounded-full flex items-center justify-center shadow-md hover:bg-primary/90 transition-colors"
-                title="Change logo"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-              </button>
-              <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
             </div>
 
             {/* Name + quick stats */}
