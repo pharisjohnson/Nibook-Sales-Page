@@ -21,6 +21,11 @@ create table if not exists public.profiles (
   plan text default 'starter' check (plan in ('starter', 'premium', 'enterprise')),
   plan_expires_at timestamptz,
   avatar_url text,
+  subscription_plan text,
+  subscription_status text check (subscription_status in ('active', 'cancelled', 'past_due', 'incomplete')),
+  paystack_customer_code text,
+  subscription_code text,
+  subscription_started_at timestamptz,
   created_at timestamptz default now()
 );
 
@@ -45,6 +50,21 @@ do $$ begin
   end if;
   if not exists (select 1 from information_schema.columns where table_name='profiles' and column_name='onboarding_completed') then
     alter table public.profiles add column onboarding_completed boolean default false;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='profiles' and column_name='subscription_plan') then
+    alter table public.profiles add column subscription_plan text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='profiles' and column_name='subscription_status') then
+    alter table public.profiles add column subscription_status text check (subscription_status in ('active', 'cancelled', 'past_due', 'incomplete'));
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='profiles' and column_name='paystack_customer_code') then
+    alter table public.profiles add column paystack_customer_code text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='profiles' and column_name='subscription_code') then
+    alter table public.profiles add column subscription_code text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='profiles' and column_name='subscription_started_at') then
+    alter table public.profiles add column subscription_started_at timestamptz;
   end if;
 end $$;
 

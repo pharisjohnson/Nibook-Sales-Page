@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, Zap, Users, Building2, Gift, Phone, Loader2, CheckCircle2, XCircle, ArrowRight } from "lucide-react";
-import { useState, useRef } from "react";
+import { Check, Zap, Users, Building2, Gift, Mail, Loader2, ArrowRight } from "lucide-react";
+import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import {
@@ -8,6 +8,10 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useAuth } from "@/lib/auth";
+
+const STARTER_PLAN_CODE = import.meta.env.VITE_PAYSTACK_STARTER_PLAN_CODE as string | undefined;
+const PREMIUM_PLAN_CODE = import.meta.env.VITE_PAYSTACK_PREMIUM_PLAN_CODE as string | undefined;
 
 const plans = [
   {
@@ -23,6 +27,7 @@ const plans = [
     seats: "1 user",
     cta: "Start Free Trial",
     isTrial: true,
+    planCode: STARTER_PLAN_CODE,
     ctaStyle: "border-2 border-border hover:border-primary hover:bg-primary/5 text-foreground",
     cardStyle: "bg-white border border-border",
     dark: false,
@@ -50,6 +55,7 @@ const plans = [
     seats: "Up to 10 users",
     cta: "Get Premium",
     isTrial: false,
+    planCode: PREMIUM_PLAN_CODE,
     ctaStyle: "bg-primary text-white hover:bg-primary/90 shadow-lg shadow-primary/25",
     cardStyle: "bg-foreground text-white border border-foreground",
     dark: true,
@@ -79,6 +85,7 @@ const plans = [
     seats: "Unlimited users",
     cta: "Contact Sales",
     isTrial: false,
+    planCode: undefined,
     ctaStyle: "border-2 border-border hover:border-primary hover:bg-primary/5 text-foreground",
     cardStyle: "bg-white border border-border",
     dark: false,
@@ -97,24 +104,20 @@ const plans = [
   },
 ];
 
-type PayStep = "idle" | "form" | "pending" | "success" | "failed";
+type PayStep = "idle" | "email" | "redirecting";
 
 interface PayState {
   plan: typeof plans[0] | null;
-  phone: string;
-  reference: string;
+  email: string;
   step: PayStep;
-  message: string;
 }
 
 export function Pricing() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
-  const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const { user } = useAuth();
 
-  const [pay, setPay] = useState<PayState>({
-    plan: null, phone: "", reference: "", step: "idle", message: "",
-  });
+  const [pay, setPay] = useState<PayState>({ plan: null, email: "", step: "idle" });
 
   function openPayModal(plan: typeof plans[0]) {
     if (plan.cta === "Contact Sales") {
@@ -126,71 +129,70 @@ export function Pricing() {
       toast({ title: "Trial started!", description: "Your 7-day free trial has begun — no card needed." });
       return;
     }
-    setPay({ plan, phone: "", reference: "", step: "form", message: "" });
+
+    // If already logged in, skip email step
+    if (user?.email) {
+      setPay({ plan, email: user.email, step: "email" });
+    } else {
+      setPay({ plan, email: "", step: "email" });
+    }
   }
 
   function closePay() {
-    if (pollTimer.current) clearInterval(pollTimer.current);
-    setPay(s => ({ ...s, step: "idle", plan: null }));
+    setPay({ plan: null, email: "", step: "idle" });
   }
 
-  async function initiatePayment() {
-    if (!pay.plan) return;
-    const rawPhone = pay.phone.trim();
-    if (!rawPhone || rawPhone.length < 9) {
-      toast({ title: "Invalid phone", description: "Enter a valid Safaricom number.", variant: "destructive" });
+  async function redirectToPaystack() {
+    if (!pay.plan || !pay.email.trim()) return;
+
+    if (!pay.plan.planCode) {
+      toast({
+        title: "Not configured",
+        description: "Payment plans are not yet configured. Please contact support.",
+        variant: "destructive",
+      });
       return;
     }
 
-    setPay(s => ({ ...s, step: "pending", message: "Sending STK Push to your phone…" }));
+    setPay(s => ({ ...s, step: "redirecting" }));
 
     try {
-      const res = await fetch("/api/payments/initiate", {
+      const res = await fetch("/api/subscriptions/initialize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          phone: rawPhone,
-          amount: pay.plan.amount,
-          plan: pay.plan.name,
+          email: pay.email.trim(),
+          plan_code: pay.plan.planCode,
+          owner_id: user?.id ?? undefined,
         }),
       });
-      const data = await res.json() as { success: boolean; reference?: string; message?: string };
 
-      if (!res.ok || !data.success) {
-        setPay(s => ({ ...s, step: "failed", message: data.message ?? "Payment initiation failed." }));
+      const data = await res.json() as {
+        success: boolean;
+        authorization_url?: string;
+        message?: string;
+      };
+
+      if (!res.ok || !data.success || !data.authorization_url) {
+        toast({
+          title: "Something went wrong",
+          description: data.message ?? "Could not start checkout. Please try again.",
+          variant: "destructive",
+        });
+        setPay(s => ({ ...s, step: "email" }));
         return;
       }
 
-      const ref = data.reference ?? "";
-      setPay(s => ({ ...s, reference: ref, message: "STK Push sent — enter your M-Pesa PIN on your phone." }));
-      pollStatus(ref);
+      // Redirect to Paystack hosted checkout
+      window.location.href = data.authorization_url;
     } catch {
-      setPay(s => ({ ...s, step: "failed", message: "Could not reach the payment server. Try again." }));
+      toast({
+        title: "Network error",
+        description: "Could not reach the payment server. Please try again.",
+        variant: "destructive",
+      });
+      setPay(s => ({ ...s, step: "email" }));
     }
-  }
-
-  function pollStatus(reference: string) {
-    let attempts = 0;
-    pollTimer.current = setInterval(async () => {
-      attempts++;
-      if (attempts > 20) {
-        clearInterval(pollTimer.current!);
-        setPay(s => ({ ...s, step: "failed", message: "Payment timed out. Please try again." }));
-        return;
-      }
-      try {
-        const res = await fetch(`/api/payments/status/${encodeURIComponent(reference)}`);
-        const data = await res.json() as { success: boolean; status?: string };
-        const status = (data.status ?? "").toUpperCase();
-        if (status === "SUCCESS" || status === "COMPLETE" || status === "COMPLETED") {
-          clearInterval(pollTimer.current!);
-          setPay(s => ({ ...s, step: "success", message: "Payment confirmed! Welcome to Nibook." }));
-        } else if (status === "FAILED" || status === "CANCELLED" || status === "CANCELED") {
-          clearInterval(pollTimer.current!);
-          setPay(s => ({ ...s, step: "failed", message: "Payment was cancelled or failed. Try again." }));
-        }
-      } catch { /* ignore, keep polling */ }
-    }, 4000);
   }
 
   return (
@@ -278,104 +280,88 @@ export function Pricing() {
           viewport={{ once: true }}
           className="text-center text-sm text-muted-foreground mt-10"
         >
-          All plans include M-Pesa support · Cancel anytime · Prices in KES
+          All plans include M-Pesa support · Cancel anytime · Prices in KES · Secure checkout via Paystack
         </motion.p>
       </div>
 
-      {/* ── Payment Dialog ── */}
+      {/* ── Paystack Checkout Dialog ── */}
       <Dialog open={pay.step !== "idle"} onOpenChange={open => { if (!open) closePay(); }}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Phone className="w-4 h-4 text-primary" />
+                <Mail className="w-4 h-4 text-primary" />
               </div>
-              Pay with M-Pesa
+              Subscribe to {pay.plan?.name}
             </DialogTitle>
             <DialogDescription>
               {pay.plan && (
-                <span>
-                  <strong>{pay.plan.name}</strong> — KES {pay.plan.price}/month
-                </span>
+                <span>KES {pay.plan.price}/month · Billed monthly · Cancel anytime</span>
               )}
             </DialogDescription>
           </DialogHeader>
 
           <AnimatePresence mode="wait">
-            {pay.step === "form" && (
-              <motion.div key="form" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="space-y-4">
+            {pay.step === "email" && (
+              <motion.div
+                key="email"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                className="space-y-4"
+              >
                 <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-700">
-                  Enter your Safaricom number. You'll receive an STK Push to enter your M-Pesa PIN.
+                  You'll be redirected to Paystack's secure checkout to complete your subscription.
                 </div>
+
                 <div>
-                  <label className="text-sm font-medium text-foreground mb-1.5 block">Phone Number</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">🇰🇪 +254</span>
-                    <Input
-                      className="pl-[72px]"
-                      placeholder="7XX XXX XXX"
-                      value={pay.phone}
-                      onChange={e => setPay(s => ({ ...s, phone: e.target.value.replace(/\D/g, "") }))}
-                      maxLength={10}
-                      inputMode="numeric"
-                      onKeyDown={e => { if (e.key === "Enter") initiatePayment(); }}
-                    />
-                  </div>
+                  <label className="text-sm font-medium text-foreground mb-1.5 block">Email address</label>
+                  <Input
+                    type="email"
+                    placeholder="you@example.com"
+                    value={pay.email}
+                    onChange={e => setPay(s => ({ ...s, email: e.target.value }))}
+                    onKeyDown={e => { if (e.key === "Enter") redirectToPaystack(); }}
+                    disabled={!!user?.email}
+                  />
+                  {user?.email && (
+                    <p className="text-xs text-muted-foreground mt-1">Using your account email</p>
+                  )}
                 </div>
+
                 <div className="flex items-center justify-between p-3 bg-muted/40 rounded-xl text-sm">
-                  <span className="text-muted-foreground">Amount</span>
+                  <span className="text-muted-foreground">Total today</span>
                   <span className="font-bold text-foreground">KES {pay.plan?.price}/month</span>
                 </div>
-                <Button className="w-full" onClick={initiatePayment}>
-                  Send STK Push <ArrowRight className="w-4 h-4 ml-1" />
+
+                <Button
+                  className="w-full"
+                  onClick={redirectToPaystack}
+                  disabled={!pay.email.trim()}
+                >
+                  Continue to Paystack <ArrowRight className="w-4 h-4 ml-1" />
                 </Button>
+
+                <p className="text-center text-xs text-muted-foreground">
+                  🔒 Secured by Paystack · Card & M-Pesa accepted
+                </p>
               </motion.div>
             )}
 
-            {pay.step === "pending" && (
-              <motion.div key="pending" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="py-6 flex flex-col items-center gap-4 text-center">
-                <div className="relative">
-                  <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                  </div>
+            {pay.step === "redirecting" && (
+              <motion.div
+                key="redirecting"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="py-8 flex flex-col items-center gap-4 text-center"
+              >
+                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Loader2 className="w-8 h-8 text-primary animate-spin" />
                 </div>
                 <div>
-                  <p className="font-semibold text-foreground">Awaiting payment…</p>
-                  <p className="text-sm text-muted-foreground mt-1">{pay.message}</p>
-                </div>
-                <div className="w-full p-3 bg-amber-50 border border-amber-100 rounded-xl text-xs text-amber-700 text-left">
-                  📱 Check your phone and enter your M-Pesa PIN to complete the payment.
-                </div>
-              </motion.div>
-            )}
-
-            {pay.step === "success" && (
-              <motion.div key="success" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="py-6 flex flex-col items-center gap-4 text-center">
-                <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
-                  <CheckCircle2 className="w-9 h-9 text-green-600" />
-                </div>
-                <div>
-                  <p className="font-bold text-lg text-foreground">Payment Confirmed!</p>
-                  <p className="text-sm text-muted-foreground mt-1">{pay.message}</p>
-                </div>
-                <Button className="w-full" onClick={() => { closePay(); setLocation("/dashboard"); }}>
-                  Go to Dashboard <ArrowRight className="w-4 h-4 ml-1" />
-                </Button>
-              </motion.div>
-            )}
-
-            {pay.step === "failed" && (
-              <motion.div key="failed" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="py-6 flex flex-col items-center gap-4 text-center">
-                <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center">
-                  <XCircle className="w-9 h-9 text-red-500" />
-                </div>
-                <div>
-                  <p className="font-bold text-lg text-foreground">Payment Failed</p>
-                  <p className="text-sm text-muted-foreground mt-1">{pay.message}</p>
-                </div>
-                <div className="flex gap-2 w-full">
-                  <Button variant="outline" className="flex-1" onClick={closePay}>Cancel</Button>
-                  <Button className="flex-1" onClick={() => setPay(s => ({ ...s, step: "form", message: "" }))}>Try Again</Button>
+                  <p className="font-semibold text-foreground">Redirecting to Paystack…</p>
+                  <p className="text-sm text-muted-foreground mt-1">Please wait while we open secure checkout.</p>
                 </div>
               </motion.div>
             )}

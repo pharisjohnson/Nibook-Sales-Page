@@ -2,6 +2,7 @@ import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Loader2 } from "lucide-react";
 
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
@@ -11,6 +12,8 @@ import WaitlistPage from "@/pages/waitlist";
 import OnboardingPage from "@/pages/onboarding";
 
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import SubscriptionCallbackPage from "@/pages/subscription-callback";
 import { useAuth } from "@/lib/auth";
 import { useProfile } from "@/lib/profile";
 import DashboardHome from "@/pages/dashboard";
@@ -20,6 +23,14 @@ import AvailabilityPage from "@/pages/availability";
 import TeamPage from "@/pages/team";
 import SettingsPage from "@/pages/settings";
 import AnalyticsPage from "@/pages/analytics";
+
+function PageLoader() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+    </div>
+  );
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -33,7 +44,7 @@ const queryClient = new QueryClient({
 function ProtectedDashboard({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const { profile, loading: profileLoading } = useProfile();
-  if (loading || profileLoading) return null;
+  if (loading || profileLoading) return <PageLoader />;
   if (!user) return <Redirect to="/" />;
   if (profile && !profile.onboarding_completed) return <Redirect to="/onboarding" />;
   return <DashboardLayout>{children}</DashboardLayout>;
@@ -42,7 +53,7 @@ function ProtectedDashboard({ children }: { children: React.ReactNode }) {
 function ProtectedOnboarding({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const { profile, loading: profileLoading } = useProfile();
-  if (loading || profileLoading) return null;
+  if (loading || profileLoading) return <PageLoader />;
   if (!user) return <Redirect to="/" />;
   if (profile?.onboarding_completed) return <Redirect to="/dashboard" />;
   return <>{children}</>;
@@ -55,6 +66,7 @@ function Router() {
       <Route path="/directory" component={DirectoryPage} />
       <Route path="/book/:slug" component={BookingStorePage} />
       <Route path="/waitlist" component={WaitlistPage} />
+      <Route path="/subscription/callback" component={SubscriptionCallbackPage} />
       <Route path="/onboarding">
         <ProtectedOnboarding><OnboardingPage /></ProtectedOnboarding>
       </Route>
@@ -88,14 +100,16 @@ function Router() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL?.replace(/\/$/, "") || ""}>
-          <Router />
-        </WouterRouter>
-        <Toaster />
-      </TooltipProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <WouterRouter base={import.meta.env.BASE_URL?.replace(/\/$/, "") || ""}>
+            <Router />
+          </WouterRouter>
+          <Toaster />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 
