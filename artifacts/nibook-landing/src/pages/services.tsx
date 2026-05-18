@@ -23,7 +23,7 @@ import {
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
-import { supabase } from "@/lib/supabase";
+import { insforge } from "@/lib/insforge";
 
 const MAX_IMAGES = 2;
 
@@ -438,7 +438,7 @@ export default function ServicesPage() {
 
   const deleteService = async (id: string) => {
     const svc = services.find(s => s.id === id);
-    await supabase.from("services").delete().eq("id", id);
+    await insforge.database.from("services").delete().eq("id", id);
     setServices(services.filter(s => s.id !== id));
     toast({ title: "Service deleted", description: `"${svc?.name}" has been removed.` });
   };
@@ -447,7 +447,7 @@ export default function ServicesPage() {
     const svc = services.find(s => s.id === id);
     if (!svc) return;
     const newActive = !svc.active;
-    await supabase.from("services").update({ is_active: newActive }).eq("id", id);
+    await insforge.database.from("services").update({ is_active: newActive }).eq("id", id);
     setServices(services.map(s => s.id === id ? { ...s, active: newActive } : s));
   };
 

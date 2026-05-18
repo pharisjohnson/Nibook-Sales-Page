@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth";
 import { useProfile } from "@/lib/profile";
-import { supabase } from "@/lib/supabase";
+import { insforge } from "@/lib/insforge";
 import { useToast } from "@/hooks/use-toast";
 
 const categories = [
@@ -28,7 +28,7 @@ export default function OnboardingPage() {
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  const [bizName, setBizName] = useState(user?.user_metadata?.business_name ?? "");
+  const [bizName, setBizName] = useState(user?.displayName ?? "");
   const [phone, setPhone] = useState("");
   const [location, setLocation] = useState("");
   const [category, setCategory] = useState("");
@@ -78,7 +78,7 @@ export default function OnboardingPage() {
     setLoading(true);
     const validServices = services.filter(s => s.name.trim());
     for (const svc of validServices) {
-      await supabase.from("services").insert({
+      await insforge.database.from("services").insert({
         owner_id: user!.id,
         name: svc.name.trim(),
         price: parseFloat(svc.price) || 0,
