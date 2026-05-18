@@ -4,7 +4,7 @@ import { Link } from "wouter";
 import { Calendar, ArrowLeft, Mail, CheckCircle2, Loader2, Users, Zap, Bell } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/lib/supabase";
+import { insforge } from "@/lib/insforge";
 
 export default function WaitlistPage() {
   const [email, setEmail] = useState("");
@@ -19,7 +19,7 @@ export default function WaitlistPage() {
     setLoading(true);
     setError("");
     try {
-      const { error: err } = await supabase
+      const { error: err } = await insforge.database
         .from("waitlist")
         .insert({ email: email.trim().toLowerCase(), name: name.trim() || null });
       if (err && err.code === "23505") {

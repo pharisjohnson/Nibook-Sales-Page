@@ -24,3 +24,9 @@ expertMode = true
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 20000
+
+[userenv]
+
+[userenv.shared]
+VITE_INSFORGE_URL = "https://q777uqjk.us-east.insforge.app"
+VITE_INSFORGE_ANON_KEY = "ik_197348a717c8d12ac52dda7880e2cdca"

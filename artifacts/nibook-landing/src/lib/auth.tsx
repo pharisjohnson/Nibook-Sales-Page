@@ -1,10 +1,14 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import type { Session, User } from "@supabase/supabase-js";
-import { supabase } from "./supabase";
+import { insforge } from "./insforge";
+
+export interface NibookUser {
+  id: string;
+  email: string;
+  displayName?: string | null;
+}
 
 interface AuthContextType {
-  session: Session | null;
-  user: User | null;
+  user: NibookUser | null;
   loading: boolean;
   signUp: (email: string, password: string, businessName: string) => Promise<{ error: string | null }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
@@ -13,46 +17,55 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+function toUser(raw: any): NibookUser | null {
+  if (!raw) return null;
+  return {
+    id: raw.id ?? "",
+    email: raw.email ?? "",
+    displayName: raw.displayName ?? raw.name ?? null,
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<NibookUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setUser(data.session?.user ?? null);
-      setLoading(false);
-    });
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, sess) => {
-      setSession(sess);
-      setUser(sess?.user ?? null);
-    });
-
-    return () => listener.subscription.unsubscribe();
+    insforge.auth.getCurrentUser()
+      .then(({ data }) => {
+        setUser(toUser(data?.user ?? null));
+      })
+      .catch(() => setUser(null))
+      .finally(() => setLoading(false));
   }, []);
 
   async function signUp(email: string, password: string, businessName: string) {
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await insforge.auth.signUp({
       email,
       password,
-      options: { data: { business_name: businessName } },
+      name: businessName,
     });
-    return { error: error?.message ?? null };
+    if (error) return { error: error.message };
+    const u = (data as any)?.user ?? (data as any);
+    setUser(toUser(u));
+    return { error: null };
   }
 
   async function signIn(email: string, password: string) {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error?.message ?? null };
+    const { data, error } = await insforge.auth.signInWithPassword({ email, password });
+    if (error) return { error: error.message };
+    const u = (data as any)?.user ?? (data as any);
+    setUser(toUser(u));
+    return { error: null };
   }
 
   async function signOut() {
-    await supabase.auth.signOut();
+    await insforge.auth.signOut();
+    setUser(null);
   }
 
   return (
-    <AuthContext.Provider value={{ session, user, loading, signUp, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signUp, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );
