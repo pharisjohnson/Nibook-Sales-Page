@@ -59,7 +59,7 @@ export default function DashboardHome() {
   useEffect(() => {
     if (!user) return;
     setBookingsLoading(true);
-    supabase
+    insforge.database
       .from("bookings")
       .select("*, services(name)")
       .eq("owner_id", user.id)

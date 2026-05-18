@@ -337,7 +337,7 @@ export default function ServicesPage() {
   useEffect(() => {
     if (!user) return;
     setLoadingServices(true);
-    supabase
+    insforge.database
       .from("services")
       .select("*")
       .eq("owner_id", user.id)
@@ -390,7 +390,7 @@ export default function ServicesPage() {
     const priceFormatted = priceNum.toLocaleString();
 
     if (editingService) {
-      const { error } = await supabase
+      const { error } = await insforge.database
         .from("services")
         .update({
           name: form.name.trim(),
@@ -407,7 +407,7 @@ export default function ServicesPage() {
       ));
       toast({ title: "Service updated", description: `"${form.name}" has been updated.` });
     } else {
-      const { data, error } = await supabase
+      const { data, error } = await insforge.database
         .from("services")
         .insert({
           owner_id: user.id,
