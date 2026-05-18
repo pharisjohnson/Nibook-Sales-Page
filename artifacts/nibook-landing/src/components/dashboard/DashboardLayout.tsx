@@ -24,7 +24,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { user } = useAuth();
   const { profile } = useProfile();
 
-  const displayName = profile?.business_name || user?.user_metadata?.business_name || "My Business";
+  const displayName = profile?.business_name || (user as any)?.user_metadata?.business_name || "My Business";
   const displayEmail = user?.email ?? "";
   const initials = displayName.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
 

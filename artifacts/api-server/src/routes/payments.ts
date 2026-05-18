@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { getSupabaseAdmin } from "../lib/supabase.js";
+import { getInsforgeAdmin } from "../lib/insforge.js";
 
 const router: IRouter = Router();
 
@@ -69,9 +69,8 @@ router.post("/payments/initiate", async (req: Request, res: Response) => {
     process.env.PAYHERO_CALLBACK_URL ??
     `https://${process.env.REPLIT_DEV_DOMAIN ?? "localhost"}/api/payments/callback`;
 
-  // Save payment record in Supabase before initiating
-  const supabase = getSupabaseAdmin();
-  await supabase.from("payments").insert({
+  const db = getInsforgeAdmin();
+  await db.database.from("payments").insert({
     reference: externalRef,
     phone: phoneNormalized,
     amount,
@@ -96,11 +95,10 @@ router.post("/payments/initiate", async (req: Request, res: Response) => {
 
     const data = (await payheroRes.json()) as Record<string, unknown>;
 
-    // Store PayHero response
-    await supabase.from("payments").update({ payhero_response: data }).eq("reference", externalRef);
+    await db.database.from("payments").update({ payhero_response: data }).eq("reference", externalRef);
 
     if (!payheroRes.ok) {
-      await supabase.from("payments").update({ status: "failed" }).eq("reference", externalRef);
+      await db.database.from("payments").update({ status: "failed" }).eq("reference", externalRef);
       res.status(payheroRes.status).json({
         success: false,
         message: (data.message as string) ?? "PayHero request failed",
@@ -116,7 +114,7 @@ router.post("/payments/initiate", async (req: Request, res: Response) => {
       data,
     });
   } catch (err) {
-    await supabase.from("payments").update({ status: "failed" }).eq("reference", externalRef);
+    await db.database.from("payments").update({ status: "failed" }).eq("reference", externalRef);
     res.status(502).json({ success: false, message: "Failed to reach PayHero", error: String(err) });
   }
 });
@@ -144,13 +142,12 @@ router.get("/payments/status/:reference", async (req: Request, res: Response) =>
 
     const status = (data.status as string) ?? "PENDING";
 
-    // Update payment status in Supabase
-    const supabase = getSupabaseAdmin();
+    const db = getInsforgeAdmin();
     const normalizedStatus = status.toUpperCase();
     if (["SUCCESS", "COMPLETE", "COMPLETED"].includes(normalizedStatus)) {
-      await supabase.from("payments").update({ status: "success", updated_at: new Date().toISOString() }).eq("reference", reference);
+      await db.database.from("payments").update({ status: "success", updated_at: new Date().toISOString() }).eq("reference", reference);
     } else if (["FAILED", "CANCELLED", "CANCELED"].includes(normalizedStatus)) {
-      await supabase.from("payments").update({ status: "failed", updated_at: new Date().toISOString() }).eq("reference", reference);
+      await db.database.from("payments").update({ status: "failed", updated_at: new Date().toISOString() }).eq("reference", reference);
     }
 
     res.json({ success: true, status, data });
@@ -161,19 +158,19 @@ router.get("/payments/status/:reference", async (req: Request, res: Response) =>
 
 router.post("/payments/callback", async (req: Request, res: Response) => {
   const payload = req.body as Record<string, unknown>;
-  console.log("[PayHero callback]", JSON.stringify(payload));
 
   const reference = (payload.reference ?? payload.external_reference ?? payload.ExternalReference) as string | undefined;
   const statusRaw = (payload.status ?? payload.Status ?? "") as string;
 
   if (reference) {
-    const supabase = getSupabaseAdmin();
+    const db = getInsforgeAdmin();
     const normalizedStatus = statusRaw.toUpperCase();
     let dbStatus = "pending";
     if (["SUCCESS", "COMPLETE", "COMPLETED"].includes(normalizedStatus)) dbStatus = "success";
     else if (["FAILED", "CANCELLED", "CANCELED"].includes(normalizedStatus)) dbStatus = "failed";
 
-    await supabase.from("payments")
+    await db.database
+      .from("payments")
       .update({ status: dbStatus, callback_payload: payload, updated_at: new Date().toISOString() })
       .eq("reference", reference);
   }

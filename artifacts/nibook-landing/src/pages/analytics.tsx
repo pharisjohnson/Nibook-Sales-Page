@@ -1,10 +1,12 @@
 import { motion } from "framer-motion";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/auth";
+import { insforge } from "@/lib/insforge";
 import {
   TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight,
   Download, Share2, FileText, Calendar, DollarSign,
@@ -58,12 +60,90 @@ const bookingStatuses = [
 
 export default function AnalyticsPage() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [range, setRange] = useState<Range>("30 days");
+  const [liveBookings, setLiveBookings] = useState<any[]>([]);
 
-  const data = revenueData[range];
-  const maxVal = Math.max(...data.map(d => d.value));
-  const totalRevenue = data.reduce((s, d) => s + d.value, 0);
-  const totalBookings = serviceStats.reduce((s, d) => s + d.bookings, 0);
+  useEffect(() => {
+    if (!user) return;
+    const now = new Date();
+    const from = new Date(now);
+    if (range === "7 days") from.setDate(now.getDate() - 7);
+    else if (range === "30 days") from.setDate(now.getDate() - 30);
+    else if (range === "90 days") from.setDate(now.getDate() - 90);
+    else from.setMonth(0, 1);
+    insforge.database
+      .from("bookings")
+      .select("*, services(name, price)")
+      .eq("owner_id", user.id)
+      .gte("scheduled_at", from.toISOString())
+      .then(({ data }) => { if (data) setLiveBookings(data); });
+  }, [user, range]);
+
+  const hasLiveData = liveBookings.length > 0;
+  const data = hasLiveData
+    ? (() => {
+        const map: Record<string, number> = {};
+        liveBookings.forEach((b: any) => {
+          const d = new Date(b.scheduled_at);
+          const key = range === "7 days"
+            ? d.toLocaleDateString("en-US", { weekday: "short" })
+            : range === "This year"
+              ? d.toLocaleDateString("en-US", { month: "short" })
+              : `W${Math.ceil(d.getDate() / 7)}`;
+          map[key] = (map[key] ?? 0) + (b.status === "completed" ? Number(b.amount ?? 0) : 0);
+        });
+        return Object.entries(map).map(([label, value]) => ({ label, value }));
+      })()
+    : revenueData[range];
+
+  const maxVal = Math.max(...data.map(d => d.value), 1);
+  const totalRevenue = hasLiveData
+    ? liveBookings.filter((b: any) => b.status === "completed").reduce((s: number, b: any) => s + Number(b.amount ?? 0), 0)
+    : data.reduce((s, d) => s + d.value, 0);
+  const totalBookings = hasLiveData ? liveBookings.length : serviceStats.reduce((s, d) => s + d.bookings, 0);
+
+  const SERVICE_COLORS = [
+    "from-pink-500 to-rose-500", "from-violet-500 to-purple-500",
+    "from-blue-500 to-cyan-500", "from-emerald-500 to-teal-500",
+    "from-amber-500 to-orange-500", "from-red-500 to-pink-500",
+  ];
+  const liveServiceStats = hasLiveData ? (() => {
+    const map: Record<string, { name: string; bookings: number; revenue: number; growth: number }> = {};
+    liveBookings.forEach((b: any) => {
+      const name = b.services?.name ?? "Service";
+      if (!map[name]) map[name] = { name, bookings: 0, revenue: 0, growth: 0 };
+      map[name].bookings++;
+      if (b.status === "completed") map[name].revenue += Number(b.amount ?? 0);
+    });
+    return Object.values(map).sort((a, b) => b.revenue - a.revenue).map((s, i) => ({
+      ...s,
+      color: SERVICE_COLORS[i % SERVICE_COLORS.length],
+    }));
+  })() : serviceStats;
+
+  const liveTopClients = hasLiveData ? (() => {
+    const map: Record<string, { name: string; bookings: number; spend: number; initials: string }> = {};
+    liveBookings.forEach((b: any) => {
+      const key = b.client_name;
+      if (!map[key]) map[key] = { name: b.client_name, bookings: 0, spend: 0, initials: b.client_name.split(" ").map((n: string) => n[0]).join("") };
+      map[key].bookings++;
+      if (b.status === "completed") map[key].spend += Number(b.amount ?? 0);
+    });
+    return Object.values(map).sort((a, b) => b.spend - a.spend).slice(0, 5);
+  })() : topClients;
+
+  const liveStatusCounts = hasLiveData ? (() => {
+    const counts: Record<string, number> = { completed: 0, cancelled: 0, "no-show": 0, pending: 0 };
+    liveBookings.forEach((b: any) => { if (b.status in counts) counts[b.status]++; });
+    const total = liveBookings.length;
+    return [
+      { label: "Completed", count: counts.completed, pct: total ? Math.round(counts.completed / total * 100) : 0, color: "bg-green-500" },
+      { label: "Cancelled", count: counts.cancelled, pct: total ? Math.round(counts.cancelled / total * 100) : 0, color: "bg-red-400" },
+      { label: "No-Show", count: counts["no-show"], pct: total ? Math.round(counts["no-show"] / total * 100) : 0, color: "bg-orange-400" },
+      { label: "Pending", count: counts.pending, pct: total ? Math.round(counts.pending / total * 100) : 0, color: "bg-yellow-400" },
+    ];
+  })() : bookingStatuses;
 
   const handleExport = (format: string) => {
     toast({ title: `Exporting as ${format}`, description: "Your report will be ready in a moment." });
@@ -172,7 +252,7 @@ export default function AnalyticsPage() {
             <CardTitle className="text-base flex items-center gap-2"><Scissors className="w-4 h-4 text-primary" />Service Performance</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {serviceStats.map((s, i) => (
+            {liveServiceStats.map((s, i) => (
               <div key={s.name} className="space-y-1">
                 <div className="flex items-center justify-between text-sm">
                   <div className="flex items-center gap-2">
@@ -192,7 +272,7 @@ export default function AnalyticsPage() {
                   <motion.div
                     className={`h-full bg-gradient-to-r ${s.color} rounded-full`}
                     initial={{ width: 0 }}
-                    animate={{ width: `${(s.bookings / serviceStats[0].bookings) * 100}%` }}
+                    animate={{ width: `${(s.bookings / (liveServiceStats[0]?.bookings || 1)) * 100}%` }}
                     transition={{ duration: 0.6, delay: i * 0.1 }}
                   />
                 </div>
@@ -210,11 +290,11 @@ export default function AnalyticsPage() {
           <CardContent className="space-y-4 pt-2">
             {/* Visual breakdown bar */}
             <div className="flex h-4 rounded-full overflow-hidden gap-0.5">
-              {bookingStatuses.map(s => (
+              {liveStatusCounts.map(s => (
                 <div key={s.label} className={`${s.color} transition-all`} style={{ width: `${s.pct}%` }} title={`${s.label}: ${s.pct}%`} />
               ))}
             </div>
-            {bookingStatuses.map(s => (
+            {liveStatusCounts.map(s => (
               <div key={s.label} className="flex items-center justify-between text-sm">
                 <div className="flex items-center gap-2">
                   <div className={`w-3 h-3 rounded-full ${s.color}`} />
@@ -246,7 +326,7 @@ export default function AnalyticsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {topClients.map((c, i) => (
+                {liveTopClients.map((c, i) => (
                   <tr key={c.name} className="hover:bg-muted/30 transition-colors">
                     <td className="py-3 pr-4">
                       <div className="flex items-center gap-2.5">

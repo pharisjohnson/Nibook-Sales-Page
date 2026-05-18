@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,10 +24,16 @@ import {
   LayoutList, LayoutGrid,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/auth";
+import { insforge } from "@/lib/insforge";
+
+const capitalize = (s: string) =>
+  s ? s.charAt(0).toUpperCase() + s.slice(1).replace(/-(\w)/g, (_: string, c: string) => `-${c.toUpperCase()}`) : s;
 
 type Status = "Confirmed" | "Pending" | "Completed" | "Cancelled" | "No-Show";
 type Booking = {
   id: string;
+  serviceId?: string;
   client: string;
   phone: string;
   service: string;
@@ -39,16 +45,6 @@ type Booking = {
   notes: string;
 };
 
-const initialBookings: Booking[] = [
-  { id: "B1001", client: "Maria N.", phone: "+254 712 345 678", service: "Hair Braiding", date: "Oct 24, 2023", time: "10:00 AM", amount: "2,500", payment: "M-Pesa", status: "Confirmed", notes: "Prefers box braids. Regular client." },
-  { id: "B1002", client: "James O.", phone: "+254 722 111 222", service: "Beard Trim", date: "Oct 24, 2023", time: "02:30 PM", amount: "800", payment: "In Person", status: "Confirmed", notes: "" },
-  { id: "B1003", client: "Grace M.", phone: "+254 733 444 555", service: "Locs Retwist", date: "Oct 25, 2023", time: "09:00 AM", amount: "3,500", payment: "Bank Transfer", status: "Pending", notes: "Waiting for payment confirmation." },
-  { id: "B1004", client: "David K.", phone: "+254 701 667 889", service: "Haircut", date: "Oct 22, 2023", time: "11:00 AM", amount: "1,000", payment: "M-Pesa", status: "Completed", notes: "" },
-  { id: "B1005", client: "Fatuma A.", phone: "+254 744 900 123", service: "Hair Braiding", date: "Oct 21, 2023", time: "01:00 PM", amount: "2,500", payment: "In Person", status: "Completed", notes: "Long session, great tip." },
-  { id: "B1006", client: "Peter M.", phone: "+254 799 555 001", service: "Beard Trim", date: "Oct 20, 2023", time: "04:00 PM", amount: "800", payment: "M-Pesa", status: "Cancelled", notes: "Client cancelled same day." },
-  { id: "B1007", client: "Lucy W.", phone: "+254 700 234 567", service: "Locs Retwist", date: "Oct 19, 2023", time: "10:30 AM", amount: "3,500", payment: "M-Pesa", status: "Completed", notes: "" },
-  { id: "B1008", client: "Aisha B.", phone: "+254 711 888 999", service: "Hair Braiding", date: "Oct 26, 2023", time: "03:00 PM", amount: "2,500", payment: "-", status: "Pending", notes: "New client referral." },
-];
 
 const SERVICES = ["Hair Braiding", "Beard Trim", "Locs Retwist", "Haircut", "Massage"];
 const PAYMENTS = ["M-Pesa", "Bank Transfer", "In Person", "PayPal"];
@@ -73,11 +69,52 @@ type ModalType = "details" | "message" | "reschedule" | "cancel" | "add" | "mark
 
 export default function BookingsPage() {
   const { toast } = useToast();
-  const [bookings, setBookings] = useState(initialBookings);
+  const { user } = useAuth();
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [bookingsLoading, setBookingsLoading] = useState(true);
+  const [userServices, setUserServices] = useState<{ id: string; name: string; price: number }[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState<"all" | "upcoming" | "completed" | "cancelled">("all");
   const [modal, setModal] = useState<ModalType>(null);
   const [selected, setSelected] = useState<Booking | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    setBookingsLoading(true);
+    Promise.all([
+      insforge.database
+        .from("bookings")
+        .select("*, services(name, price)")
+        .eq("owner_id", user.id)
+        .order("scheduled_at", { ascending: false }),
+      insforge.database
+        .from("services")
+        .select("id, name, price")
+        .eq("owner_id", user.id)
+        .eq("is_active", true),
+    ]).then(([bookingsRes, servicesRes]) => {
+      if (bookingsRes.data) {
+        setBookings(bookingsRes.data.map((b: any) => {
+          const dt = b.scheduled_at ? new Date(b.scheduled_at) : null;
+          return {
+            id: b.id,
+            serviceId: b.service_id,
+            client: b.client_name,
+            phone: b.client_phone ?? "—",
+            service: b.services?.name ?? "Service",
+            date: dt ? dt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—",
+            time: dt ? dt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : "—",
+            amount: Number(b.amount ?? 0).toLocaleString(),
+            payment: b.payment_status ?? "unpaid",
+            status: capitalize(b.status) as Status,
+            notes: b.notes ?? "",
+          };
+        }));
+      }
+      if (servicesRes.data) setUserServices(servicesRes.data);
+      setBookingsLoading(false);
+    }).catch(() => setBookingsLoading(false));
+  }, [user]);
 
   // Message modal state
   const [message, setMessage] = useState("");
@@ -108,8 +145,10 @@ export default function BookingsPage() {
 
   const closeModal = () => { setModal(null); setSelected(null); };
 
-  const markBooking = (id: string, newStatus: "Completed" | "No-Show") => {
+  const markBooking = async (id: string, newStatus: "Completed" | "No-Show") => {
     const booking = bookings.find(b => b.id === id);
+    const dbStatus = newStatus === "No-Show" ? "no-show" : newStatus.toLowerCase();
+    await insforge.database.from("bookings").update({ status: dbStatus }).eq("id", id);
     setBookings(bookings.map(b => b.id === id ? { ...b, status: newStatus } : b));
     toast({
       title: newStatus === "Completed" ? "Marked as completed" : "Marked as no-show",
@@ -117,8 +156,9 @@ export default function BookingsPage() {
     });
   };
 
-  const handleCancel = () => {
+  const handleCancel = async () => {
     if (!selected) return;
+    await insforge.database.from("bookings").update({ status: "cancelled" }).eq("id", selected.id);
     setBookings(bookings.map(b => b.id === selected.id ? { ...b, status: "Cancelled" } : b));
     toast({ title: "Booking cancelled", description: `${selected.client}'s booking has been cancelled.` });
     closeModal();
@@ -130,12 +170,14 @@ export default function BookingsPage() {
     closeModal();
   };
 
-  const handleReschedule = () => {
+  const handleReschedule = async () => {
     if (!rescheduleDate || !rescheduleTime) {
       toast({ title: "Missing fields", description: "Please select both a date and time.", variant: "destructive" });
       return;
     }
     const formatted = new Date(rescheduleDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    const isoDate = new Date(`${rescheduleDate}T${rescheduleTime}`).toISOString();
+    await insforge.database.from("bookings").update({ scheduled_at: isoDate, status: "confirmed" }).eq("id", selected!.id);
     setBookings(bookings.map(b =>
       b.id === selected?.id ? { ...b, date: formatted, time: rescheduleTime, status: "Confirmed" } : b
     ));
@@ -143,15 +185,32 @@ export default function BookingsPage() {
     closeModal();
   };
 
-  const handleAddBooking = () => {
+  const handleAddBooking = async () => {
     if (!addForm.client.trim()) { setAddError("Client name is required."); return; }
     if (!addForm.date) { setAddError("Please select a date."); return; }
+    if (!user) return;
     setAddError("");
     const formatted = new Date(addForm.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    const svc = userServices.find(s => s.name === addForm.service);
+    const isoScheduled = new Date(`${addForm.date}T${addForm.time}`).toISOString();
+    const rawAmount = svc?.price ?? Number((AMOUNTS[addForm.service] ?? "0").replace(/,/g, ""));
+    const { data, error } = await insforge.database.from("bookings").insert({
+      owner_id: user.id,
+      service_id: svc?.id ?? null,
+      client_name: addForm.client,
+      client_phone: addForm.phone || null,
+      scheduled_at: isoScheduled,
+      amount: rawAmount,
+      payment_status: "unpaid",
+      notes: addForm.notes || null,
+      status: "pending",
+    }).select().single();
+    if (error) { setAddError("Failed to save booking. Please try again."); return; }
     const newBooking: Booking = {
-      id: `B${1000 + bookings.length + 1}`,
+      id: data.id,
+      serviceId: svc?.id,
       client: addForm.client,
-      phone: addForm.phone || "-",
+      phone: addForm.phone || "—",
       service: addForm.service,
       date: formatted,
       time: addForm.time,
