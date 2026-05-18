@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,10 +16,13 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { UserPlus, MoreHorizontal, Mail, Clock, Crown, Shield, Users, AlertCircle } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/auth";
+import { insforge } from "@/lib/insforge";
 
 type Role = "Owner" | "Admin" | "Staff";
 interface Member {
-  id: number;
+  id: string;
   name: string;
   email: string;
   role: Role;
@@ -27,15 +30,13 @@ interface Member {
   joinedDate: string;
   status: "active" | "pending";
 }
+interface Invite {
+  id: string;
+  email: string;
+  role: Role;
+  sentAt: string;
+}
 
-const initialMembers: Member[] = [
-  { id: 1, name: "Amina K.", email: "amina@example.com", role: "Owner", avatar: "https://i.pravatar.cc/150?u=amina", joinedDate: "Jan 2024", status: "active" },
-  { id: 2, name: "James O.", email: "james@example.com", role: "Staff", avatar: "https://i.pravatar.cc/150?u=james", joinedDate: "Mar 2024", status: "active" },
-];
-
-const pendingInvites = [
-  { id: 1, email: "grace@example.com", role: "Staff" as Role, sentAt: "2 days ago" },
-];
 
 const roleConfig: Record<Role, { color: string; icon: React.ElementType }> = {
   Owner: { color: "bg-yellow-100 text-yellow-800 border-yellow-200", icon: Crown },
@@ -44,36 +45,80 @@ const roleConfig: Record<Role, { color: string; icon: React.ElementType }> = {
 };
 
 export default function TeamPage() {
-  const [members, setMembers] = useState(initialMembers);
-  const [invites, setInvites] = useState(pendingInvites);
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const [members, setMembers] = useState<Member[]>([]);
+  const [invites, setInvites] = useState<Invite[]>([]);
+  const [loading, setLoading] = useState(true);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<Role>("Staff");
   const [inviteError, setInviteError] = useState("");
 
-  const totalSeats = 3;
+  const totalSeats = 5;
   const usedSeats = members.length;
 
-  const handleInvite = () => {
+  useEffect(() => {
+    if (!user) return;
+    setLoading(true);
+    Promise.all([
+      insforge.database.from("team_members").select("*").eq("owner_id", user.id).order("created_at"),
+      insforge.database.from("team_invites").select("*").eq("owner_id", user.id).order("created_at", { ascending: false }),
+    ]).then(([membersRes, invitesRes]) => {
+      if (membersRes.data) {
+        setMembers(membersRes.data.map((m: any) => ({
+          id: m.id,
+          name: m.name,
+          email: m.email,
+          role: m.role as Role,
+          avatar: m.avatar_url ?? "",
+          joinedDate: new Date(m.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" }),
+          status: m.status as "active" | "pending",
+        })));
+      }
+      if (invitesRes.data) {
+        setInvites(invitesRes.data.map((i: any) => ({
+          id: i.id,
+          email: i.email,
+          role: i.role as Role,
+          sentAt: new Date(i.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        })));
+      }
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, [user]);
+
+  const handleInvite = async () => {
     if (!inviteEmail.trim()) { setInviteError("Email is required."); return; }
     if (!/\S+@\S+\.\S+/.test(inviteEmail)) { setInviteError("Please enter a valid email."); return; }
     if (usedSeats >= totalSeats) { setInviteError("Seat limit reached. Upgrade to Pro to add more."); return; }
-    setInvites([...invites, { id: Date.now(), email: inviteEmail, role: inviteRole, sentAt: "just now" }]);
+    if (!user) return;
+    const { data, error } = await insforge.database
+      .from("team_invites")
+      .insert({ owner_id: user.id, email: inviteEmail, role: inviteRole })
+      .select().single();
+    if (error) { setInviteError("Failed to send invite. The email may already be invited."); return; }
+    setInvites([{ id: data.id, email: inviteEmail, role: inviteRole, sentAt: "just now" }, ...invites]);
+    toast({ title: "Invitation sent", description: `${inviteEmail} will receive an email to join.` });
     setInviteEmail("");
     setInviteRole("Staff");
     setInviteError("");
     setInviteOpen(false);
   };
 
-  const changeRole = (id: number, role: Role) => {
+  const changeRole = async (id: string, role: Role) => {
+    await insforge.database.from("team_members").update({ role }).eq("id", id);
     setMembers(members.map(m => m.id === id ? { ...m, role } : m));
   };
 
-  const removeMember = (id: number) => {
+  const removeMember = async (id: string) => {
+    await insforge.database.from("team_members").delete().eq("id", id);
     setMembers(members.filter(m => m.id !== id));
+    toast({ title: "Member removed" });
   };
 
-  const cancelInvite = (id: number) => {
+  const cancelInvite = async (id: string) => {
+    await insforge.database.from("team_invites").delete().eq("id", id);
     setInvites(invites.filter(i => i.id !== id));
   };
 

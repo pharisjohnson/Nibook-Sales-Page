@@ -51,6 +51,7 @@ export default function DashboardHome() {
   const [showBookingPage, setShowBookingPage] = useState(false);
   const [copied, setCopied] = useState(false);
   const [statModal, setStatModal] = useState<"revenue" | "bookings" | "completion" | "topservice" | null>(null);
+  const [showUpgrade, setShowUpgrade] = useState(false);
 
   const firstName = profile?.business_name?.split(" ")[0] ?? user?.email?.split("@")[0] ?? "there";
   const bookingSlug = profile?.slug ?? "your-business";
