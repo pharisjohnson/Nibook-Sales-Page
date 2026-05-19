@@ -53,7 +53,7 @@ router.post(
 
     try {
       const insforge = getInsforgeAdmin();
-      const blob = new Blob([body], { type: contentType });
+      const blob = new Blob([new Uint8Array(body)], { type: contentType });
       const { data, error } = await insforge.storage.from(BUCKET).upload(path, blob);
 
       if (error || !data) {
