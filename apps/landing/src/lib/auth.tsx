@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import type { UserSchema } from "@insforge/sdk";
 import { insforge } from "./insforge";
 import { setSession, clearSession, getStoredUser } from "./api";
+import { identifyUser, resetAnalyticsUser, track } from "./analytics";
 
 type InsforgeUser = UserSchema;
 
@@ -55,6 +56,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await insforge.database
         .from("profiles")
         .insert({ id: data.user.id, business_name: businessName, slug });
+      identifyUser(data.user.id, data.user.email ?? "", businessName);
+      track.signedUp();
     }
 
     return { error: null };
@@ -68,6 +71,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const raw = data as any;
       const token = raw?.session?.access_token ?? raw?.access_token ?? null;
       if (token) setSession({ id: data.user.id, email: data.user.email ?? "" }, token);
+      identifyUser(data.user.id, data.user.email ?? "");
+      track.signedIn();
     }
     return { error: null };
   }
@@ -75,6 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function signOut() {
     await insforge.auth.signOut();
     clearSession();
+    resetAnalyticsUser();
     setUser(null);
   }
 

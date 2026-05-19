@@ -10,8 +10,14 @@ import profileRouter from "./profile";
 import servicesRouter from "./services";
 import waitlistRouter from "./waitlist";
 import uploadRouter from "./upload";
+import adminRouter from "./admin";
+import { apiLimiter, authLimiter, uploadLimiter } from "../middlewares/rateLimiter.js";
 
 const router: IRouter = Router();
+
+router.use("/auth", authLimiter);
+router.use("/upload", uploadLimiter);
+router.use(apiLimiter);
 
 router.use(healthRouter);
 router.use(authRouter);
@@ -24,5 +30,6 @@ router.use(profileRouter);
 router.use(servicesRouter);
 router.use(waitlistRouter);
 router.use(uploadRouter);
+router.use(adminRouter);
 
 export default router;
