@@ -29,10 +29,6 @@ const initialSchedule = [
 ];
 
 type BlackoutDate = { id: number; date: string; reason: string };
-const initialBlackouts: BlackoutDate[] = [
-  { id: 1, date: "2024-12-25", reason: "Christmas Day" },
-  { id: 2, date: "2024-01-01", reason: "New Year's Day" },
-];
 
 export default function AvailabilityPage() {
   const { toast } = useToast();
@@ -40,14 +36,18 @@ export default function AvailabilityPage() {
   const [schedule, setSchedule] = useState(initialSchedule);
   const [hasChanges, setHasChanges] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [blackouts, setBlackouts] = useState<BlackoutDate[]>(initialBlackouts);
+  const [blackouts, setBlackouts] = useState<BlackoutDate[]>([]);
   const [newDate, setNewDate] = useState("");
   const [newReason, setNewReason] = useState("");
   const [dateError, setDateError] = useState("");
+  const [bufferMinutes, setBufferMinutes] = useState("15");
+  const [minNoticeHours, setMinNoticeHours] = useState("2");
+  const [maxAdvanceDays, setMaxAdvanceDays] = useState("30");
+  const [cancellationWindow, setCancellationWindow] = useState("24");
 
   useEffect(() => {
     if (!user) return;
-    apiFetch<{ schedule: any[]; blackouts: any[] }>(`/availability/${user.id}`).then(({ data }) => {
+    apiFetch<{ schedule: any[]; blackouts: any[]; rules: any }>(`/availability/${user.id}`).then(({ data }) => {
       if (data?.schedule && data.schedule.length > 0) {
         setSchedule(data.schedule.map((d: any) => ({
           day: d.day_name,
@@ -58,6 +58,13 @@ export default function AvailabilityPage() {
       }
       if (data?.blackouts) {
         setBlackouts(data.blackouts.map((b: any) => ({ id: b.id, date: b.date, reason: b.reason ?? "" })));
+      }
+      if (data?.rules) {
+        const r = data.rules;
+        if (r.buffer_minutes != null) setBufferMinutes(String(r.buffer_minutes));
+        if (r.min_notice_hours != null) setMinNoticeHours(String(r.min_notice_hours));
+        if (r.max_advance_days != null) setMaxAdvanceDays(String(r.max_advance_days));
+        if (r.cancellation_window_hours != null) setCancellationWindow(String(r.cancellation_window_hours));
       }
     });
   }, [user]);
@@ -112,18 +119,29 @@ export default function AvailabilityPage() {
         </div>
         <Button
           className="gap-2 shadow-md transition-all"
-          disabled={!hasChanges}
+          disabled={!hasChanges || saving}
           onClick={async () => {
             if (!user) return;
             setSaving(true);
-            await apiFetch(`/availability/${user.id}/schedule`, {
-              method: "PUT",
-              body: JSON.stringify({
-                schedule: schedule.map((s, i) => ({
-                  day_name: s.day, is_active: s.active, start_time: s.start, end_time: s.end, sort_order: i,
-                })),
+            await Promise.all([
+              apiFetch(`/availability/${user.id}/schedule`, {
+                method: "PUT",
+                body: JSON.stringify({
+                  schedule: schedule.map((s, i) => ({
+                    day_name: s.day, is_active: s.active, start_time: s.start, end_time: s.end, sort_order: i,
+                  })),
+                }),
               }),
-            });
+              apiFetch(`/availability/${user.id}/rules`, {
+                method: "PUT",
+                body: JSON.stringify({
+                  buffer_minutes: parseInt(bufferMinutes),
+                  min_notice_hours: parseInt(minNoticeHours),
+                  max_advance_days: parseInt(maxAdvanceDays),
+                  cancellation_window_hours: cancellationWindow === "never" ? -1 : parseInt(cancellationWindow),
+                }),
+              }),
+            ]);
             setSaving(false);
             setHasChanges(false);
             toast({ title: "Availability saved", description: "Your schedule has been updated." });
@@ -266,7 +284,7 @@ export default function AvailabilityPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Buffer between appointments</Label>
-                <Select defaultValue="15" onValueChange={() => setHasChanges(true)}>
+                <Select value={bufferMinutes} onValueChange={v => { setBufferMinutes(v); setHasChanges(true); }}>
                   <SelectTrigger className="bg-muted/20"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="0">None</SelectItem>
@@ -281,7 +299,7 @@ export default function AvailabilityPage() {
 
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Minimum booking notice</Label>
-                <Select defaultValue="2" onValueChange={() => setHasChanges(true)}>
+                <Select value={minNoticeHours} onValueChange={v => { setMinNoticeHours(v); setHasChanges(true); }}>
                   <SelectTrigger className="bg-muted/20"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="0">No minimum (last minute)</SelectItem>
@@ -296,7 +314,7 @@ export default function AvailabilityPage() {
 
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Maximum advance booking</Label>
-                <Select defaultValue="30" onValueChange={() => setHasChanges(true)}>
+                <Select value={maxAdvanceDays} onValueChange={v => { setMaxAdvanceDays(v); setHasChanges(true); }}>
                   <SelectTrigger className="bg-muted/20"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="14">14 days</SelectItem>
@@ -308,13 +326,12 @@ export default function AvailabilityPage() {
                 <p className="text-xs text-muted-foreground">How far in the future clients can book.</p>
               </div>
 
-              {/* ── Cancellation window (NEW) ── */}
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <Label className="text-sm font-medium">Cancellation window</Label>
                   <Badge variant="outline" className="text-xs bg-primary/5 text-primary border-primary/20">New</Badge>
                 </div>
-                <Select defaultValue="24" onValueChange={() => setHasChanges(true)}>
+                <Select value={cancellationWindow} onValueChange={v => { setCancellationWindow(v); setHasChanges(true); }}>
                   <SelectTrigger className="bg-muted/20"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="0">Clients can always cancel</SelectItem>

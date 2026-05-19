@@ -1,42 +1,44 @@
 import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
-import { Link } from "wouter";
+import { Link, useParams } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { insforge } from "@/lib/insforge";
+import { apiFetch } from "@/lib/api";
 import {
-  MapPin, Clock, Star, Phone, MessageSquare, ChevronRight,
-  Calendar, Scissors, Check, ArrowLeft, Share2, Heart,
+  MapPin, Clock, Phone, MessageSquare, ChevronRight,
+  Calendar, Scissors, Check, ArrowLeft, Share2, Heart, Loader2,
 } from "lucide-react";
 
-const business = {
-  name: "Amina's Beauty Studio",
-  slug: "aminas-beauty-studio",
-  category: "Hair & Beauty",
-  location: "Westlands, Nairobi",
-  rating: 4.8,
-  reviewCount: 127,
-  phone: "+254 700 123 456",
-  about: "Premier hair braiding and beauty studio in Nairobi. Serving clients for over 8 years with professional, caring service. Specialising in African hair braiding, locs, and natural hair care.",
-  hours: "Mon–Sat: 8:00 AM – 7:00 PM",
-  coverGradient: "from-pink-500 via-rose-500 to-orange-400",
-  cover_url: "",
-  logo_url: "",
+type Business = {
+  id: string;
+  slug: string;
+  business_name: string;
+  category: string | null;
+  location: string | null;
+  phone: string | null;
+  bio: string | null;
+  cover_url: string | null;
+  logo_url: string | null;
 };
 
-const services = [
-  { id: 1, name: "Hair Braiding", price: 2500, duration: 120, description: "Box braids, cornrows, and knotless styles", popular: true, color: "from-pink-500 to-rose-500" },
-  { id: 2, name: "Beard Trim & Shape", price: 800, duration: 30, description: "Professional beard grooming and lining", popular: false, color: "from-blue-500 to-cyan-500" },
-  { id: 3, name: "Locs Retwist", price: 3500, duration: 180, description: "Starter locs and retwisting for existing locs", popular: true, color: "from-violet-500 to-purple-500" },
-  { id: 4, name: "Haircut & Style", price: 1000, duration: 45, description: "Cut, wash and blow-dry styling", popular: false, color: "from-emerald-500 to-teal-500" },
-  { id: 5, name: "Deep Conditioning", price: 1500, duration: 60, description: "Protein and moisture treatment for hair health", popular: false, color: "from-amber-500 to-orange-500" },
-];
+type Service = {
+  id: string;
+  name: string;
+  price: number;
+  duration_minutes: number;
+  is_active: boolean;
+};
 
-const timeSlots = ["9:00 AM", "10:00 AM", "11:00 AM", "1:00 PM", "2:00 PM", "3:00 PM", "4:00 PM"];
+const TIME_SLOTS = ["09:00","10:00","11:00","13:00","14:00","15:00","16:00"];
+function to12h(t: string) {
+  const [h, m] = t.split(":").map(Number);
+  const suffix = h >= 12 ? "PM" : "AM";
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${suffix}`;
+}
 
 function getInitials(name: string) {
   return name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
@@ -44,90 +46,103 @@ function getInitials(name: string) {
 
 export default function BookingStorePage() {
   const { toast } = useToast();
-  const [selectedService, setSelectedService] = useState<typeof services[0] | null>(null);
+  const params = useParams<{ slug: string }>();
+  const slug = params.slug ?? "";
+
+  const [business, setBusiness] = useState<Business | null>(null);
+  const [services, setServices] = useState<Service[]>([]);
+  const [pageLoading, setPageLoading] = useState(true);
+  const [liked, setLiked] = useState(false);
+
+  const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [step, setStep] = useState<"pick-time" | "details" | "confirm">("pick-time");
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
   const [selectedTime, setSelectedTime] = useState("");
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
-  const [liked, setLiked] = useState(false);
-  const [reviews, setReviews] = useState<any[]>([]);
-  const [showReviewForm, setShowReviewForm] = useState(false);
-  const [reviewerName, setReviewerName] = useState("");
-  const [newRating, setNewRating] = useState(0);
-  const [newReviewText, setNewReviewText] = useState("");
-  const [hoverRating, setHoverRating] = useState(0);
-  const [loading, setLoading] = useState(true);
-
-  const coverUrl = business.cover_url;
-  const logoUrl = business.logo_url;
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    fetchReviews();
-  }, []);
+    if (!slug) return;
+    Promise.all([
+      apiFetch<{ data: Business }>(`/profile/by-slug/${slug}`),
+      apiFetch<{ data: Service[] }>(`/services?owner_id=__lookup__`),
+    ]).then(async ([bizRes]) => {
+      const biz = bizRes.data?.data ?? null;
+      setBusiness(biz);
+      if (biz) {
+        const svcRes = await apiFetch<{ data: Service[] }>(`/services?owner_id=${biz.id}`);
+        setServices((svcRes.data?.data ?? []).filter(s => s.is_active));
+      }
+      setPageLoading(false);
+    });
+  }, [slug]);
 
-  const fetchReviews = async () => {
-    setLoading(true);
-    const { data, error } = await insforge.database
-      .from('reviews')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (data) setReviews(data);
-    setLoading(false);
-  };
-
-  const openBooking = (service: typeof services[0]) => {
-    setSelectedService(service);
+  const openBooking = (svc: Service) => {
+    setSelectedService(svc);
     setStep("pick-time");
     setSelectedTime("");
     setClientName("");
     setClientPhone("");
   };
 
-  const handleConfirm = () => {
-    if (!clientName.trim() || !clientPhone.trim()) return;
+  const handleConfirm = async () => {
+    if (!clientName.trim() || !clientPhone.trim() || !business || !selectedService) return;
+    setSubmitting(true);
+    const isoScheduled = new Date(`${selectedDate}T${selectedTime}`).toISOString();
+    const { error } = await apiFetch("/bookings", {
+      method: "POST",
+      body: JSON.stringify({
+        owner_id: business.id,
+        service_id: selectedService.id,
+        client_name: clientName.trim(),
+        client_phone: clientPhone.trim(),
+        scheduled_at: isoScheduled,
+        duration_minutes: selectedService.duration_minutes,
+        amount: selectedService.price,
+        payment_status: "unpaid",
+      }),
+    });
+    setSubmitting(false);
+    if (error) {
+      toast({ title: "Booking failed", description: error, variant: "destructive" });
+      return;
+    }
     setStep("confirm");
   };
 
   const handleDone = () => {
     toast({
       title: "Booking confirmed!",
-      description: `Your ${selectedService?.name} appointment has been booked. Check WhatsApp for confirmation.`,
+      description: `Your ${selectedService?.name} appointment is booked. We'll be in touch via WhatsApp.`,
     });
     setSelectedService(null);
   };
 
-  const handleSubmitReview = async () => {
-    if (!reviewerName.trim() || newRating === 0 || !newReviewText.trim()) return;
-    const { data, error } = await insforge.database
-      .from('reviews')
-      .insert([{
-        business_id: business.slug,
-        name: reviewerName,
-        initials: getInitials(reviewerName),
-        rating: newRating,
-        text: newReviewText,
-      }])
-      .select();
-    if (data) {
-      setReviews([data[0], ...reviews]);
-      setReviewerName("");
-      setNewRating(0);
-      setNewReviewText("");
-      setShowReviewForm(false);
-      toast({ title: "Review submitted!", description: "Thank you for your feedback." });
-    } else {
-      toast({ title: "Error submitting review", description: error?.message });
-    }
-  };
+  if (pageLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!business) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-4">
+        <p className="text-muted-foreground">Business not found.</p>
+        <Link href="/directory"><Button variant="outline">Browse directory</Button></Link>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
       {/* Top nav */}
       <div className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b px-4 py-3 flex items-center justify-between">
-        <Link href="/">
+        <Link href="/directory">
           <button className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-            <ArrowLeft className="w-4 h-4" />
-            Back
+            <ArrowLeft className="w-4 h-4" />Back
           </button>
         </Link>
         <div className="flex items-center gap-2">
@@ -150,13 +165,13 @@ export default function BookingStorePage() {
         </div>
       </div>
 
-      {/* ── HERO ── */}
+      {/* Hero */}
       <div className="relative">
         <div className="relative h-64 overflow-hidden">
-          {coverUrl ? (
-            <img src={coverUrl} alt="Business cover" className="w-full h-full object-cover" />
+          {business.cover_url ? (
+            <img src={business.cover_url} alt="Cover" className="w-full h-full object-cover" />
           ) : (
-            <div className={`w-full h-full bg-gradient-to-br ${business.coverGradient}`} />
+            <div className="w-full h-full bg-gradient-to-br from-pink-500 via-rose-500 to-orange-400" />
           )}
           <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/5 to-black/40" />
         </div>
@@ -165,169 +180,91 @@ export default function BookingStorePage() {
           <div className="flex items-end gap-4 -mt-12 mb-4 relative z-10">
             <div className="shrink-0">
               <div className="w-24 h-24 rounded-2xl border-4 border-white shadow-xl overflow-hidden">
-                {logoUrl ? (
-                  <img src={logoUrl} alt="Business logo" className="w-full h-full object-cover" />
+                {business.logo_url ? (
+                  <img src={business.logo_url} alt="Logo" className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center">
-                    <span className="text-white text-2xl font-bold">{getInitials(business.name)}</span>
+                    <span className="text-white text-2xl font-bold">{getInitials(business.business_name)}</span>
                   </div>
                 )}
               </div>
             </div>
             <div className="pb-1 flex-1 min-w-0">
-              <h1 className="text-xl font-bold text-foreground leading-tight truncate">{business.name}</h1>
-              <div className="flex items-center gap-2 mt-1 flex-wrap">
-                <Badge variant="outline" className="text-xs bg-primary/5 text-primary border-primary/20 py-0">
+              <h1 className="text-xl font-bold text-foreground leading-tight truncate">{business.business_name}</h1>
+              {business.category && (
+                <Badge variant="outline" className="text-xs bg-primary/5 text-primary border-primary/20 py-0 mt-1">
                   {business.category}
                 </Badge>
-                <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                  <span className="font-semibold text-foreground">{business.rating}</span>
-                  <span>({business.reviewCount})</span>
-                </div>
-              </div>
+              )}
             </div>
           </div>
 
           <div className="bg-white border border-border rounded-2xl p-4 mb-5 shadow-sm">
-            <p className="text-sm text-muted-foreground leading-relaxed mb-3">{business.about}</p>
+            {business.bio && <p className="text-sm text-muted-foreground leading-relaxed mb-3">{business.bio}</p>}
             <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1.5">
-                <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />{business.location}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-primary shrink-0" />{business.hours}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Phone className="w-3.5 h-3.5 text-primary shrink-0" />{business.phone}
-              </span>
+              {business.location && (
+                <span className="flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />{business.location}
+                </span>
+              )}
+              {business.phone && (
+                <span className="flex items-center gap-1.5">
+                  <Phone className="w-3.5 h-3.5 text-primary shrink-0" />{business.phone}
+                </span>
+              )}
             </div>
           </div>
 
-          <div className="mb-8">
-            <h2 className="text-base font-bold mb-3">Services</h2>
-            <div className="space-y-2.5">
-              {services.map((service, i) => (
-                <motion.div
-                  key={service.id}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.05 }}
-                  className="flex items-center gap-3 p-3.5 bg-white border border-border rounded-2xl hover:border-primary/30 hover:shadow-sm transition-all"
-                >
-                  <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${service.color} flex items-center justify-center shrink-0`}>
-                    <Scissors className="w-4.5 h-4.5 text-white w-[18px] h-[18px]" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <p className="font-semibold text-sm leading-tight">{service.name}</p>
-                      {service.popular && (
-                        <span className="text-[10px] px-1.5 py-0.5 bg-amber-50 text-amber-600 border border-amber-200 rounded-full font-medium">Popular</span>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{service.description}</p>
-                    <div className="flex items-center gap-3 mt-1 text-xs">
-                      <span className="font-bold text-foreground">KES {service.price.toLocaleString()}</span>
-                      <span className="flex items-center gap-1 text-muted-foreground">
-                        <Clock className="w-3 h-3" />{service.duration} min
-                      </span>
-                    </div>
-                  </div>
-                  <Button size="sm" className="shrink-0 h-8 px-3 text-xs gap-1" onClick={() => openBooking(service)}>
-                    Book <ChevronRight className="w-3 h-3" />
-                  </Button>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-
+          {/* Services */}
           <div className="mb-12">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-base font-bold">Reviews</h2>
-              <div className="flex items-center gap-1">
-                <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-                <span className="font-bold text-sm">{business.rating}</span>
-                <span className="text-xs text-muted-foreground ml-0.5">· {business.reviewCount} reviews</span>
-              </div>
-            </div>
-            {loading ? (
-              <p className="text-sm text-muted-foreground">Loading reviews...</p>
+            <h2 className="text-base font-bold mb-3">Services</h2>
+            {services.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No services listed yet.</p>
             ) : (
               <div className="space-y-2.5">
-                {reviews.map((review) => (
-                  <div key={review.id} className="p-4 bg-white border border-border rounded-2xl">
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold shrink-0">
-                        {review.initials}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold leading-tight">{review.name}</p>
-                        <p className="text-xs text-muted-foreground">{new Date(review.created_at).toLocaleDateString()}</p>
-                      </div>
-                      <div className="flex shrink-0">
-                        {Array.from({ length: review.rating }).map((_, i) => (
-                          <Star key={i} className="w-3 h-3 fill-amber-400 text-amber-400" />
-                        ))}
+                {services.map((svc, i) => (
+                  <motion.div
+                    key={svc.id}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.05 }}
+                    className="flex items-center gap-3 p-3.5 bg-white border border-border rounded-2xl hover:border-primary/30 hover:shadow-sm transition-all"
+                  >
+                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center shrink-0">
+                      <Scissors className="w-[18px] h-[18px] text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm leading-tight">{svc.name}</p>
+                      <div className="flex items-center gap-3 mt-1 text-xs">
+                        <span className="font-bold text-foreground">KES {svc.price.toLocaleString()}</span>
+                        <span className="flex items-center gap-1 text-muted-foreground">
+                          <Clock className="w-3 h-3" />{svc.duration_minutes} min
+                        </span>
                       </div>
                     </div>
-                    <p className="text-sm text-muted-foreground leading-relaxed">{review.text}</p>
-                  </div>
+                    <Button size="sm" className="shrink-0 h-8 px-3 text-xs gap-1" onClick={() => openBooking(svc)}>
+                      Book <ChevronRight className="w-3 h-3" />
+                    </Button>
+                  </motion.div>
                 ))}
-              </div>
-            )}
-          </div>
-
-          <div className="mb-12">
-            {!showReviewForm ? (
-              <Button variant="outline" className="w-full" onClick={() => setShowReviewForm(true)}>
-                Leave a Review
-              </Button>
-            ) : (
-              <div className="bg-white border border-border rounded-2xl p-4 space-y-4">
-                <h3 className="font-semibold text-sm">Write a Review</h3>
-                <div className="space-y-1.5">
-                  <Label>Your name</Label>
-                  <Input placeholder="e.g. Grace Mwangi" value={reviewerName} onChange={e => setReviewerName(e.target.value)} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Rating</Label>
-                  <div className="flex gap-1">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <button key={star} type="button" onClick={() => setNewRating(star)} onMouseEnter={() => setHoverRating(star)} onMouseLeave={() => setHoverRating(0)}>
-                        <Star className={`w-5 h-5 ${star <= (hoverRating || newRating) ? "fill-amber-400 text-amber-400" : "text-muted-foreground"}`} />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Your review</Label>
-                  <textarea
-                    className="w-full border border-border rounded-lg p-2 text-sm min-h-[80px] resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
-                    placeholder="Share your experience..."
-                    value={newReviewText}
-                    onChange={e => setNewReviewText(e.target.value)}
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" className="flex-1" onClick={() => { setShowReviewForm(false); setNewRating(0); setNewReviewText(""); setReviewerName(""); }}>Cancel</Button>
-                  <Button className="flex-1" disabled={!reviewerName.trim() || newRating === 0 || !newReviewText.trim()} onClick={handleSubmitReview}>Submit Review</Button>
-                </div>
               </div>
             )}
           </div>
         </div>
       </div>
 
+      {/* Booking dialog */}
       <Dialog open={!!selectedService} onOpenChange={open => { if (!open) setSelectedService(null); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{step === "confirm" ? "Booking Confirmed!" : `Book: ${selectedService?.name}`}</DialogTitle>
             <DialogDescription>
-              {step === "pick-time" && "Choose a time that works for you."}
+              {step === "pick-time" && "Choose a date and time."}
               {step === "details" && "Enter your details to complete the booking."}
               {step === "confirm" && "We'll send a WhatsApp confirmation shortly."}
             </DialogDescription>
           </DialogHeader>
+
           {step === "confirm" ? (
             <div className="text-center py-4 space-y-4">
               <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
@@ -335,7 +272,7 @@ export default function BookingStorePage() {
               </div>
               <div className="space-y-1">
                 <p className="font-semibold">{selectedService?.name}</p>
-                <p className="text-sm text-muted-foreground">{selectedTime} · {business.name}</p>
+                <p className="text-sm text-muted-foreground">{to12h(selectedTime)} · {business.business_name}</p>
                 <p className="text-sm font-medium text-primary">KES {selectedService?.price.toLocaleString()}</p>
               </div>
               <div className="p-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-700">
@@ -346,19 +283,27 @@ export default function BookingStorePage() {
             </div>
           ) : step === "pick-time" ? (
             <div className="space-y-4">
-              <div className="p-3 bg-muted/40 rounded-xl flex items-center gap-3">
-                <Calendar className="w-4 h-4 text-primary" />
-                <div>
-                  <p className="text-sm font-medium">Today — {new Date().toLocaleDateString("en-KE", { weekday: "long", month: "long", day: "numeric" })}</p>
-                  <p className="text-xs text-muted-foreground">{selectedService?.duration} min · KES {selectedService?.price.toLocaleString()}</p>
-                </div>
+              <div className="space-y-2">
+                <Label>Date</Label>
+                <Input
+                  type="date"
+                  value={selectedDate}
+                  min={new Date().toISOString().split("T")[0]}
+                  onChange={e => setSelectedDate(e.target.value)}
+                />
               </div>
               <div>
                 <p className="text-sm font-medium mb-2">Available times</p>
                 <div className="grid grid-cols-3 gap-2">
-                  {timeSlots.map((time) => (
-                    <button key={time} onClick={() => setSelectedTime(time)} className={`py-2 px-3 rounded-lg text-sm font-medium border transition-all ${selectedTime === time ? "bg-primary text-white border-primary" : "bg-white border-border hover:border-primary/50"}`}>
-                      {time}
+                  {TIME_SLOTS.map(t => (
+                    <button
+                      key={t}
+                      onClick={() => setSelectedTime(t)}
+                      className={`py-2 px-3 rounded-lg text-sm font-medium border transition-all ${
+                        selectedTime === t ? "bg-primary text-white border-primary" : "bg-white border-border hover:border-primary/50"
+                      }`}
+                    >
+                      {to12h(t)}
                     </button>
                   ))}
                 </div>
@@ -368,7 +313,7 @@ export default function BookingStorePage() {
           ) : (
             <div className="space-y-4">
               <div className="p-3 bg-muted/40 rounded-xl text-sm">
-                <span className="font-medium">{selectedService?.name}</span> · {selectedTime}
+                <span className="font-medium">{selectedService?.name}</span> · {to12h(selectedTime)}
               </div>
               <div className="space-y-3">
                 <div className="space-y-1.5">
@@ -382,7 +327,14 @@ export default function BookingStorePage() {
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" className="flex-1" onClick={() => setStep("pick-time")}>Back</Button>
-                <Button className="flex-1" disabled={!clientName.trim() || !clientPhone.trim()} onClick={handleConfirm}>Confirm Booking</Button>
+                <Button
+                  className="flex-1"
+                  disabled={!clientName.trim() || !clientPhone.trim() || submitting}
+                  onClick={handleConfirm}
+                >
+                  {submitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                  Confirm Booking
+                </Button>
               </div>
             </div>
           )}

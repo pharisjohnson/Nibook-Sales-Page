@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -45,12 +45,15 @@ type Booking = {
   notes: string;
 };
 
-const SERVICES = ["Hair Braiding", "Beard Trim", "Locs Retwist", "Haircut", "Massage"];
 const PAYMENTS = ["M-Pesa", "Bank Transfer", "In Person", "PayPal"];
-const TIMES = ["08:00 AM","09:00 AM","09:30 AM","10:00 AM","10:30 AM","11:00 AM","12:00 PM","01:00 PM","02:00 PM","02:30 PM","03:00 PM","04:00 PM","05:00 PM"];
-const AMOUNTS: Record<string, string> = {
-  "Hair Braiding": "2,500", "Beard Trim": "800", "Locs Retwist": "3,500", "Haircut": "1,000", "Massage": "2,000",
-};
+const TIMES = ["08:00","09:00","09:30","10:00","10:30","11:00","12:00","13:00","14:00","14:30","15:00","16:00","17:00"];
+
+function to12h(t: string) {
+  const [h, m] = t.split(":").map(Number);
+  const suffix = h >= 12 ? "PM" : "AM";
+  const hour = h % 12 || 12;
+  return `${String(hour).padStart(2, "0")}:${String(m).padStart(2, "0")} ${suffix}`;
+}
 
 const statusConfig: Record<Status, string> = {
   Confirmed: "bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200",
@@ -102,7 +105,12 @@ export default function BookingsPage() {
           };
         }));
       }
-      if (servicesRes.data?.data) setUserServices(servicesRes.data.data);
+      if (servicesRes.data?.data) {
+        setUserServices(servicesRes.data.data);
+        if (servicesRes.data.data.length > 0) {
+          setAddForm(f => f.service ? f : { ...f, service: servicesRes.data!.data[0].name });
+        }
+      }
       setBookingsLoading(false);
     }).catch(() => setBookingsLoading(false));
   }, [user]);
@@ -114,8 +122,7 @@ export default function BookingsPage() {
   const [rescheduleDate, setRescheduleDate] = useState("");
   const [rescheduleTime, setRescheduleTime] = useState("");
 
-  // Add Booking state
-  const [addForm, setAddForm] = useState({ client: "", phone: "", service: "Hair Braiding", date: "", time: "10:00 AM", payment: "M-Pesa", notes: "" });
+  const [addForm, setAddForm] = useState({ client: "", phone: "", service: "", date: "", time: "10:00", payment: "M-Pesa", notes: "" });
   const [addError, setAddError] = useState("");
 
   const openModal = (type: ModalType, booking: Booking | null = null) => {
@@ -168,11 +175,12 @@ export default function BookingsPage() {
     }
     const formatted = new Date(rescheduleDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
     const isoDate = new Date(`${rescheduleDate}T${rescheduleTime}`).toISOString();
+    const displayTime = to12h(rescheduleTime);
     await apiFetch(`/bookings/${selected!.id}`, { method: "PATCH", body: JSON.stringify({ scheduled_at: isoDate, status: "confirmed" }) });
     setBookings(bookings.map(b =>
-      b.id === selected?.id ? { ...b, date: formatted, time: rescheduleTime, status: "Confirmed" } : b
+      b.id === selected?.id ? { ...b, date: formatted, time: displayTime, status: "Confirmed" } : b
     ));
-    toast({ title: "Booking rescheduled", description: `${selected?.client} rescheduled to ${formatted} at ${rescheduleTime}.` });
+    toast({ title: "Booking rescheduled", description: `${selected?.client} rescheduled to ${formatted} at ${displayTime}.` });
     closeModal();
   };
 
@@ -184,7 +192,7 @@ export default function BookingsPage() {
     const formatted = new Date(addForm.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
     const svc = userServices.find(s => s.name === addForm.service);
     const isoScheduled = new Date(`${addForm.date}T${addForm.time}`).toISOString();
-    const rawAmount = svc?.price ?? Number((AMOUNTS[addForm.service] ?? "0").replace(/,/g, ""));
+    const rawAmount = svc?.price ?? 0;
     const { data: bookingRes, error } = await apiFetch<{ data: any }>("/bookings", {
       method: "POST",
       body: JSON.stringify({
@@ -207,8 +215,8 @@ export default function BookingsPage() {
       phone: addForm.phone || "—",
       service: addForm.service,
       date: formatted,
-      time: addForm.time,
-      amount: AMOUNTS[addForm.service] || "0",
+      time: to12h(addForm.time),
+      amount: rawAmount.toLocaleString(),
       payment: addForm.payment,
       status: "Pending",
       notes: addForm.notes,
@@ -712,7 +720,7 @@ export default function BookingsPage() {
                   <SelectValue placeholder="Select time" />
                 </SelectTrigger>
                 <SelectContent>
-                  {TIMES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  {TIMES.map(t => <SelectItem key={t} value={t}>{to12h(t)}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -780,10 +788,12 @@ export default function BookingsPage() {
               <Label>Service</Label>
               <Select value={addForm.service} onValueChange={v => setAddForm({ ...addForm, service: v })}>
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Select a service" />
                 </SelectTrigger>
                 <SelectContent>
-                  {SERVICES.map(s => <SelectItem key={s} value={s}>{s} — KES {AMOUNTS[s]}</SelectItem>)}
+                  {userServices.length > 0
+                    ? userServices.map(s => <SelectItem key={s.id} value={s.name}>{s.name} — KES {s.price.toLocaleString()}</SelectItem>)
+                    : <SelectItem value="" disabled>No services added yet</SelectItem>}
                 </SelectContent>
               </Select>
             </div>
@@ -805,7 +815,7 @@ export default function BookingsPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {TIMES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                    {TIMES.map(t => <SelectItem key={t} value={t}>{to12h(t)}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -839,7 +849,7 @@ export default function BookingsPage() {
             {addForm.service && addForm.date && addForm.client && (
               <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-800">
                 <CheckCircle2 className="w-4 h-4 shrink-0" />
-                <span>Booking <strong>{addForm.client}</strong> for <strong>{addForm.service}</strong> (KES {AMOUNTS[addForm.service]}) at {addForm.time}</span>
+                <span>Booking <strong>{addForm.client}</strong> for <strong>{addForm.service}</strong> (KES {(userServices.find(s => s.name === addForm.service)?.price ?? 0).toLocaleString()}) at {to12h(addForm.time)}</span>
               </div>
             )}
           </div>

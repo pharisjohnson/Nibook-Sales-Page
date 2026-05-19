@@ -1,161 +1,76 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { apiFetch } from "@/lib/api";
 import {
   Search, MapPin, Star, Clock, Scissors, Sparkles, Dumbbell,
-  Heart, Camera, SlidersHorizontal, X, ArrowLeft, LayoutList, LayoutGrid, ImageIcon, ChevronRight,
+  Heart, Camera, SlidersHorizontal, X, ArrowLeft, LayoutList, LayoutGrid, ImageIcon, ChevronRight, Loader2,
 } from "lucide-react";
 
 const categories = [
   { id: "all", label: "All", icon: Sparkles },
-  { id: "hair", label: "Hair & Beauty", icon: Scissors },
-  { id: "fitness", label: "Fitness", icon: Dumbbell },
-  { id: "wellness", label: "Wellness & Spa", icon: Heart },
-  { id: "photography", label: "Photography", icon: Camera },
+  { id: "Hair & Beauty", label: "Hair & Beauty", icon: Scissors },
+  { id: "Fitness & Gym", label: "Fitness", icon: Dumbbell },
+  { id: "Spa & Wellness", label: "Wellness & Spa", icon: Heart },
+  { id: "Photography", label: "Photography", icon: Camera },
 ];
 
-const businesses = [
-  {
-    id: 1, slug: "aminas-beauty-studio", name: "Amina's Beauty Studio",
-    category: "hair", categoryLabel: "Hair & Beauty",
-    location: "Westlands, Nairobi", distance: "1.2 km",
-    rating: 4.8, reviewCount: 127, priceFrom: 800,
-    tags: ["Braiding", "Locs", "Beard Trim"],
-    sponsored: true, available: true,
-    gradient: "from-pink-500 to-rose-500",
-    featuredImage: null as string | null,
-  },
-  {
-    id: 2, slug: "kings-barbershop", name: "King's Barbershop",
-    category: "hair", categoryLabel: "Hair & Beauty",
-    location: "CBD, Nairobi", distance: "2.5 km",
-    rating: 4.6, reviewCount: 89, priceFrom: 500,
-    tags: ["Haircut", "Shave", "Fade"],
-    sponsored: false, available: true,
-    gradient: "from-blue-500 to-indigo-600",
-    featuredImage: null as string | null,
-  },
-  {
-    id: 3, slug: "zen-wellness-spa", name: "Zen Wellness Spa",
-    category: "wellness", categoryLabel: "Wellness & Spa",
-    location: "Kilimani, Nairobi", distance: "3.1 km",
-    rating: 4.9, reviewCount: 203, priceFrom: 2000,
-    tags: ["Massage", "Facial", "Body Wrap"],
-    sponsored: true, available: true,
-    gradient: "from-emerald-500 to-teal-600",
-    featuredImage: null as string | null,
-  },
-  {
-    id: 4, slug: "fit-nairobi", name: "FitNairobi Studio",
-    category: "fitness", categoryLabel: "Fitness",
-    location: "Lavington, Nairobi", distance: "4.0 km",
-    rating: 4.7, reviewCount: 156, priceFrom: 1200,
-    tags: ["Personal Training", "Yoga", "HIIT"],
-    sponsored: false, available: false,
-    gradient: "from-orange-500 to-red-500",
-    featuredImage: null as string | null,
-  },
-  {
-    id: 5, slug: "frames-by-fiona", name: "Frames by Fiona",
-    category: "photography", categoryLabel: "Photography",
-    location: "Karen, Nairobi", distance: "8.2 km",
-    rating: 4.9, reviewCount: 74, priceFrom: 5000,
-    tags: ["Portraits", "Events", "Studio"],
-    sponsored: true, available: true,
-    gradient: "from-violet-500 to-purple-600",
-    featuredImage: null as string | null,
-  },
-  {
-    id: 6, slug: "glow-up-beauty", name: "Glow Up Beauty Bar",
-    category: "hair", categoryLabel: "Hair & Beauty",
-    location: "Parklands, Nairobi", distance: "2.8 km",
-    rating: 4.5, reviewCount: 61, priceFrom: 1000,
-    tags: ["Nails", "Waxing", "Makeup"],
-    sponsored: false, available: true,
-    gradient: "from-amber-500 to-orange-500",
-    featuredImage: null as string | null,
-  },
-  {
-    id: 7, slug: "dr-nails-studio", name: "Dr. Nails Studio",
-    category: "hair", categoryLabel: "Hair & Beauty",
-    location: "Ngong Road, Nairobi", distance: "3.7 km",
-    rating: 4.7, reviewCount: 48, priceFrom: 600,
-    tags: ["Manicure", "Pedicure", "Gel Nails"],
-    sponsored: false, available: true,
-    gradient: "from-fuchsia-500 to-pink-600",
-    featuredImage: null as string | null,
-  },
-  {
-    id: 8, slug: "iron-republic-gym", name: "Iron Republic Gym",
-    category: "fitness", categoryLabel: "Fitness",
-    location: "Upperhill, Nairobi", distance: "5.4 km",
-    rating: 4.4, reviewCount: 93, priceFrom: 800,
-    tags: ["Gym", "Boxing", "Crossfit"],
-    sponsored: false, available: true,
-    gradient: "from-slate-600 to-gray-800",
-    featuredImage: null as string | null,
-  },
+const GRADIENTS = [
+  "from-pink-500 to-rose-500", "from-blue-500 to-indigo-600",
+  "from-emerald-500 to-teal-600", "from-orange-500 to-red-500",
+  "from-violet-500 to-purple-600", "from-amber-500 to-orange-500",
+  "from-fuchsia-500 to-pink-600", "from-slate-600 to-gray-800",
 ];
 
-const sortOptions = ["Best Match", "Highest Rated", "Nearest", "Lowest Price", "Most Reviewed"];
+type DirectoryBusiness = {
+  id: string;
+  slug: string;
+  business_name: string;
+  category: string | null;
+  location: string | null;
+  bio: string | null;
+  logo_url: string | null;
+  cover_url: string | null;
+  avatar_url: string | null;
+};
 
-/* ── List-view card (horizontal, like the reference screenshot) ── */
-function ListCard({ biz }: { biz: typeof businesses[0] }) {
+
+function bizGradient(id: string) {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) hash = id.charCodeAt(i) + ((hash << 5) - hash);
+  return GRADIENTS[Math.abs(hash) % GRADIENTS.length];
+}
+
+/* ── List-view card ── */
+function ListCard({ biz }: { biz: DirectoryBusiness }) {
+  const gradient = bizGradient(biz.id);
   return (
     <Link href={`/book/${biz.slug}`}>
-      <motion.div
-        layout
-        className="bg-white border border-border rounded-2xl overflow-hidden hover:shadow-md hover:border-primary/20 transition-all group cursor-pointer"
-      >
+      <motion.div layout className="bg-white border border-border rounded-2xl overflow-hidden hover:shadow-md hover:border-primary/20 transition-all group cursor-pointer">
         <div className="flex gap-4 p-4">
-          {/* Logo / avatar */}
-          <div className={`w-16 h-16 rounded-xl bg-gradient-to-br ${biz.gradient} flex items-center justify-center shrink-0 shadow-sm`}>
-            {biz.featuredImage
-              ? <img src={biz.featuredImage} className="w-full h-full object-cover rounded-xl" alt={biz.name} />
+          <div className={`w-16 h-16 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center shrink-0 shadow-sm overflow-hidden`}>
+            {biz.logo_url
+              ? <img src={biz.logo_url} className="w-full h-full object-cover" alt={biz.business_name} />
               : <Scissors className="w-7 h-7 text-white" />}
           </div>
-
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2">
-              <div className="flex items-center gap-2 flex-wrap">
-                <p className="font-semibold text-sm group-hover:text-primary transition-colors">{biz.name}</p>
-                {biz.sponsored && (
-                  <Badge className="text-[10px] px-1.5 py-0 bg-amber-100 text-amber-700 border-amber-200 shadow-none">Sponsored</Badge>
-                )}
-              </div>
+              <p className="font-semibold text-sm group-hover:text-primary transition-colors">{biz.business_name}</p>
               <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0 group-hover:text-primary transition-colors" />
             </div>
-
-            <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-              <MapPin className="w-3 h-3 shrink-0" />
-              <span>{biz.location}</span>
-              <span className="text-border">·</span>
-              <span>{biz.distance}</span>
-            </div>
-
-            <div className="flex items-center gap-3 mt-1.5 text-xs">
-              <div className="flex items-center gap-1">
-                <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                <span className="font-semibold">{biz.rating}</span>
-                <span className="text-muted-foreground">({biz.reviewCount})</span>
+            {biz.location && (
+              <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                <MapPin className="w-3 h-3 shrink-0" /><span>{biz.location}</span>
               </div>
-              <div className={`flex items-center gap-1 font-medium ${biz.available ? "text-green-600" : "text-muted-foreground"}`}>
-                <Clock className="w-3 h-3" />
-                <span>{biz.available ? "Available today" : "Fully booked"}</span>
+            )}
+            {biz.category && (
+              <div className="flex gap-1.5 mt-2">
+                <span className="text-[10px] px-2 py-0.5 bg-muted rounded-full text-muted-foreground">{biz.category}</span>
               </div>
-            </div>
-
-            <div className="flex items-center justify-between mt-2">
-              <div className="flex gap-1.5 flex-wrap">
-                {biz.tags.slice(0, 3).map(t => (
-                  <span key={t} className="text-[10px] px-2 py-0.5 bg-muted rounded-full text-muted-foreground">{t}</span>
-                ))}
-              </div>
-              <span className="text-xs font-semibold text-foreground">from KES {biz.priceFrom.toLocaleString()}</span>
-            </div>
+            )}
           </div>
         </div>
       </motion.div>
@@ -163,96 +78,69 @@ function ListCard({ biz }: { biz: typeof businesses[0] }) {
   );
 }
 
-/* ── Card-view card (vertical, service-card style) ── */
-function GridCard({ biz }: { biz: typeof businesses[0] }) {
+/* ── Grid-view card ── */
+function GridCard({ biz }: { biz: DirectoryBusiness }) {
+  const gradient = bizGradient(biz.id);
   return (
     <Link href={`/book/${biz.slug}`}>
-      <motion.div
-        layout
-        className="bg-white border border-border rounded-2xl overflow-hidden hover:shadow-lg hover:border-primary/20 hover:-translate-y-0.5 transition-all group cursor-pointer flex flex-col"
-      >
-        {/* Featured image / logo banner */}
-        <div className={`relative h-36 bg-gradient-to-br ${biz.gradient} flex items-center justify-center`}>
-          {biz.featuredImage
-            ? <img src={biz.featuredImage} alt={biz.name} className="w-full h-full object-cover absolute inset-0" />
+      <motion.div layout className="bg-white border border-border rounded-2xl overflow-hidden hover:shadow-lg hover:border-primary/20 hover:-translate-y-0.5 transition-all group cursor-pointer flex flex-col">
+        <div className={`relative h-36 bg-gradient-to-br ${gradient} flex items-center justify-center`}>
+          {biz.cover_url
+            ? <img src={biz.cover_url} alt={biz.business_name} className="w-full h-full object-cover absolute inset-0" />
             : <ImageIcon className="w-10 h-10 text-white/40" />}
-
-          {/* Sponsored badge */}
-          {biz.sponsored && (
-            <span className="absolute top-2.5 left-2.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-400 text-amber-900">
-              Sponsored
-            </span>
-          )}
-
-          {/* Available pill */}
-          <span className={`absolute top-2.5 right-2.5 text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-            biz.available ? "bg-green-500 text-white" : "bg-gray-800/60 text-white"
-          }`}>
-            {biz.available ? "Available" : "Fully booked"}
-          </span>
         </div>
-
-        {/* Card body */}
         <div className="p-3 flex flex-col gap-2 flex-1">
-          <div>
-            <p className="font-bold text-sm leading-tight group-hover:text-primary transition-colors line-clamp-1">{biz.name}</p>
+          <p className="font-bold text-sm leading-tight group-hover:text-primary transition-colors line-clamp-1">{biz.business_name}</p>
+          {biz.location && (
             <div className="flex items-center gap-1 mt-0.5 text-xs text-muted-foreground">
-              <MapPin className="w-3 h-3 shrink-0" />
-              <span className="truncate">{biz.location}</span>
-              <span className="shrink-0">· {biz.distance}</span>
+              <MapPin className="w-3 h-3 shrink-0" /><span className="truncate">{biz.location}</span>
             </div>
-          </div>
-
-          <div className="flex items-center gap-1 text-xs">
-            <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-            <span className="font-semibold">{biz.rating}</span>
-            <span className="text-muted-foreground">({biz.reviewCount})</span>
-          </div>
-
-          <div className="flex gap-1 flex-wrap">
-            {biz.tags.slice(0, 2).map(t => (
-              <span key={t} className="text-[10px] px-2 py-0.5 bg-muted rounded-full text-muted-foreground">{t}</span>
-            ))}
-          </div>
+          )}
+          {biz.category && (
+            <span className="text-[10px] px-2 py-0.5 bg-muted rounded-full text-muted-foreground w-fit">{biz.category}</span>
+          )}
         </div>
-
-        {/* Card footer */}
-        <div className="px-3 pb-3 flex items-center justify-between border-t border-border/50 pt-2">
-          <span className="text-xs text-muted-foreground">from <span className="font-bold text-foreground text-sm">KES {biz.priceFrom.toLocaleString()}</span></span>
-          <Button size="sm" className="h-7 text-xs px-3 rounded-lg">Book</Button>
+        <div className="px-3 pb-3 border-t border-border/50 pt-2">
+          <Button size="sm" className="w-full h-7 text-xs rounded-lg">Book</Button>
         </div>
       </motion.div>
     </Link>
   );
 }
+
+const sortOptions = ["A–Z", "Z–A"];
 
 export default function DirectoryPage() {
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState("all");
-  const [sortBy, setSortBy] = useState("Best Match");
+  const [sortBy, setSortBy] = useState("A–Z");
   const [showFilters, setShowFilters] = useState(false);
-  const [maxPrice, setMaxPrice] = useState(30000);
   const [view, setView] = useState<"list" | "grid">("list");
+  const [businesses, setBusinesses] = useState<DirectoryBusiness[]>([]);
+  const [loadingBiz, setLoadingBiz] = useState(true);
+
+  useEffect(() => {
+    apiFetch<{ data: DirectoryBusiness[] }>("/directory").then(({ data }) => {
+      setBusinesses(data?.data ?? []);
+      setLoadingBiz(false);
+    });
+  }, []);
 
   const filtered = useMemo(() => {
     let list = [...businesses];
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(b =>
-        b.name.toLowerCase().includes(q) ||
-        b.location.toLowerCase().includes(q) ||
-        b.tags.some(t => t.toLowerCase().includes(q))
+        b.business_name.toLowerCase().includes(q) ||
+        (b.location ?? "").toLowerCase().includes(q) ||
+        (b.category ?? "").toLowerCase().includes(q)
       );
     }
     if (activeCategory !== "all") list = list.filter(b => b.category === activeCategory);
-    list = list.filter(b => b.priceFrom <= maxPrice);
-    if (sortBy === "Highest Rated") list.sort((a, b) => b.rating - a.rating);
-    else if (sortBy === "Nearest") list.sort((a, b) => parseFloat(a.distance) - parseFloat(b.distance));
-    else if (sortBy === "Lowest Price") list.sort((a, b) => a.priceFrom - b.priceFrom);
-    else if (sortBy === "Most Reviewed") list.sort((a, b) => b.reviewCount - a.reviewCount);
-    else list.sort((a, b) => (b.sponsored ? 1 : 0) - (a.sponsored ? 1 : 0) || b.rating - a.rating);
+    if (sortBy === "Z–A") list.sort((a, b) => b.business_name.localeCompare(a.business_name));
+    else list.sort((a, b) => a.business_name.localeCompare(b.business_name));
     return list;
-  }, [search, activeCategory, sortBy, maxPrice]);
+  }, [search, activeCategory, sortBy, businesses]);
 
   return (
     <div className="min-h-screen bg-[#F8FAFF]">
@@ -346,34 +234,12 @@ export default function DirectoryPage() {
           </div>
         </div>
 
-        {/* Filter panel */}
-        <AnimatePresence>
-          {showFilters && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="mb-5 p-4 bg-white border border-border rounded-2xl shadow-sm overflow-hidden"
-            >
-              <div className="space-y-3">
-                <p className="text-sm font-semibold">Max price from</p>
-                <input
-                  type="range" min={500} max={30000} step={500} value={maxPrice}
-                  onChange={e => setMaxPrice(Number(e.target.value))}
-                  className="w-full accent-primary"
-                />
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>KES 500</span>
-                  <span className="font-semibold text-foreground">Up to KES {maxPrice.toLocaleString()}</span>
-                  <span>KES 30,000</span>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
         {/* Results */}
-        {filtered.length === 0 ? (
+        {loadingBiz ? (
+          <div className="flex justify-center py-20">
+            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="text-center py-16 text-muted-foreground">
             <Search className="w-10 h-10 mx-auto mb-3 opacity-20" />
             <p className="font-medium">No businesses found</p>
@@ -390,7 +256,7 @@ export default function DirectoryPage() {
                 className="space-y-3 pb-12"
               >
                 {filtered.map((biz, i) => (
-                  <motion.div key={biz.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
+                  <motion.div key={biz.slug} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
                     <ListCard biz={biz} />
                   </motion.div>
                 ))}
@@ -404,7 +270,7 @@ export default function DirectoryPage() {
                 className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 pb-12"
               >
                 {filtered.map((biz, i) => (
-                  <motion.div key={biz.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
+                  <motion.div key={biz.slug} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
                     <GridCard biz={biz} />
                   </motion.div>
                 ))}

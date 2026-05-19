@@ -16,7 +16,6 @@ import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { useProfile } from "@/lib/profile";
-import { insforge } from "@/lib/insforge";
 import { apiFetch } from "@/lib/api";
 
 type BookingStatus = "Confirmed" | "Pending" | "Cancelled";
@@ -66,24 +65,24 @@ export default function DashboardHome() {
     const startOfMonth = new Date();
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
-    Promise.all([
-      insforge.database.from("bookings").select("amount").eq("owner_id", user.id).gte("scheduled_at", startOfMonth.toISOString()),
-      insforge.database.from("bookings").select("status, services(name)").eq("owner_id", user.id).gte("scheduled_at", startOfMonth.toISOString()),
-    ]).then(([revenueRes, bookingsRes]) => {
-      const revenue = (revenueRes.data || []).reduce((sum: number, b: any) => sum + (b.amount || 0), 0);
-      const bookings = bookingsRes.data || [];
-      const completed = bookings.filter((b: any) => b.status === "completed").length;
-      const total = bookings.length;
-      const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
-      const serviceCounts: Record<string, number> = {};
-      bookings.forEach((b: any) => {
-        const name = b.services?.name || "Unknown";
-        serviceCounts[name] = (serviceCounts[name] || 0) + 1;
-      });
-      const topService = Object.entries(serviceCounts).sort((a, b) => (b[1] as number) - (a[1] as number))[0]?.[0] || "";
-      setStats({ revenue, count: total, completionRate, topService });
-      setStatsLoading(false);
-    }).catch(() => setStatsLoading(false));
+    apiFetch<{
+      totalRevenue: number;
+      totalBookings: number;
+      completionRate: number;
+      serviceStats: { name: string; bookings: number; revenue: number }[];
+    }>(`/analytics/${user.id}?from=${startOfMonth.toISOString()}`)
+      .then(({ data }) => {
+        if (data) {
+          setStats({
+            revenue: data.totalRevenue,
+            count: data.totalBookings,
+            completionRate: data.completionRate,
+            topService: data.serviceStats[0]?.name ?? "",
+          });
+        }
+        setStatsLoading(false);
+      })
+      .catch(() => setStatsLoading(false));
   }, [user]);
 
   useEffect(() => {
@@ -124,8 +123,9 @@ export default function DashboardHome() {
     toast({ title: "Link copied!", description: "Your booking page link is on the clipboard." });
   };
 
-  const confirmCancel = () => {
+  const confirmCancel = async () => {
     if (!cancelTarget) return;
+    await apiFetch(`/bookings/${cancelTarget.id}`, { method: "PATCH", body: JSON.stringify({ status: "cancelled" }) });
     setBookings(prev => prev.map(b => b.id === cancelTarget.id ? { ...b, status: "Cancelled" } : b));
     toast({ title: "Booking cancelled", description: `${cancelTarget.client}'s booking has been cancelled.` });
     setCancelTarget(null);

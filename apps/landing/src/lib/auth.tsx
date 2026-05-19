@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { UserSchema } from "@insforge/sdk";
 import { insforge } from "./insforge";
+import { setSession, clearSession, getStoredUser } from "./api";
 
 type InsforgeUser = UserSchema;
 
@@ -20,7 +21,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     insforge.auth.getCurrentUser().then(({ data }) => {
-      setUser(data?.user ?? null);
+      const sdkUser = data?.user ?? null;
+      if (sdkUser) {
+        setUser(sdkUser);
+        const stored = getStoredUser();
+        if (!stored || stored.id !== sdkUser.id) {
+          const raw = data as any;
+          const token = raw?.session?.access_token ?? raw?.access_token ?? null;
+          if (token) setSession({ id: sdkUser.id, email: sdkUser.email ?? "" }, token);
+        }
+      } else {
+        const stored = getStoredUser();
+        if (!stored) clearSession();
+      }
       setLoading(false);
     });
   }, []);
@@ -31,11 +44,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password,
       name: businessName,
     });
-    if (error) return { error: error.message ?? "Sign up failed" };
+    if (error) return { error: (error as any).message ?? "Sign up failed" };
 
     if (data?.user) {
       setUser(data.user);
-      // Create a profile row keyed to this user's ID
+      const raw = data as any;
+      const token = raw?.session?.access_token ?? raw?.access_token ?? null;
+      if (token) setSession({ id: data.user.id, email: data.user.email ?? "" }, token);
       const slug = businessName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
       await insforge.database
         .from("profiles")
@@ -47,13 +62,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signIn(email: string, password: string) {
     const { data, error } = await insforge.auth.signInWithPassword({ email, password });
-    if (error) return { error: error.message ?? "Sign in failed" };
-    if (data?.user) setUser(data.user);
+    if (error) return { error: (error as any).message ?? "Sign in failed" };
+    if (data?.user) {
+      setUser(data.user);
+      const raw = data as any;
+      const token = raw?.session?.access_token ?? raw?.access_token ?? null;
+      if (token) setSession({ id: data.user.id, email: data.user.email ?? "" }, token);
+    }
     return { error: null };
   }
 
   async function signOut() {
     await insforge.auth.signOut();
+    clearSession();
     setUser(null);
   }
 

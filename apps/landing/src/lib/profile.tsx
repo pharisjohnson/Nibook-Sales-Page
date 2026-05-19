@@ -12,7 +12,16 @@ export interface Profile {
   category: string | null;
   logo_url: string | null;
   cover_url: string | null;
+  avatar_url: string | null;
   onboarding_completed: boolean;
+  plan: string | null;
+  mpesa_paybill: string | null;
+  mpesa_account: string | null;
+  whatsapp_enabled: boolean;
+  whatsapp_phone: string | null;
+  reminder_hours: number | null;
+  cancellation_policy: string | null;
+  booking_widget_theme: string | null;
   created_at: string;
 }
 

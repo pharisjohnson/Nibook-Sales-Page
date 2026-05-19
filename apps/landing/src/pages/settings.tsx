@@ -74,6 +74,13 @@ export default function SettingsPage() {
       setBusinessLocation(profile.location ?? "");
       setCoverUrl(profile.cover_url ?? "");
       setLogoUrl(profile.logo_url ?? "");
+      setMpesaPaybill(profile.mpesa_paybill ?? "");
+      setMpesaAccount(profile.mpesa_account ?? "");
+      setWhatsappEnabled(profile.whatsapp_enabled ?? false);
+      setWhatsappPhone(profile.whatsapp_phone ?? "");
+      setReminderHours(String(profile.reminder_hours ?? "24"));
+      if (profile.cancellation_policy) setPolicyText(profile.cancellation_policy);
+      if (profile.booking_widget_theme) setSelectedTheme(profile.booking_widget_theme);
     }
     if (user) {
       setBusinessEmail(user.email ?? "");
@@ -106,6 +113,13 @@ export default function SettingsPage() {
       phone: businessPhone.trim() || null,
       location: businessLocation.trim() || null,
       slug: slug || null,
+      mpesa_paybill: mpesaPaybill.trim() || null,
+      mpesa_account: mpesaAccount.trim() || null,
+      whatsapp_enabled: whatsappEnabled,
+      whatsapp_phone: whatsappPhone.trim() || null,
+      reminder_hours: parseInt(reminderHours) || 24,
+      cancellation_policy: policyText.trim() || null,
+      booking_widget_theme: selectedTheme || null,
     });
     setSaving(false);
     if (error && !error.includes("duplicate")) {

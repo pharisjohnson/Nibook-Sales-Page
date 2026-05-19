@@ -35,6 +35,18 @@ router.patch("/profile/:id", async (req: Request, res: Response) => {
   }
 });
 
+router.get("/profile/by-slug/:slug", async (req: Request, res: Response) => {
+  const { slug } = req.params;
+  try {
+    const db = getInsforgeAdmin();
+    const { data, error } = await db.database.from("profiles").select("*").eq("slug", slug).single();
+    if (error) { res.status(404).json({ error: "Business not found" }); return; }
+    res.json({ data });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 router.get("/directory", async (_req: Request, res: Response) => {
   try {
     const db = getInsforgeAdmin();

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
-import { insforge } from "@/lib/insforge";
+import { apiFetch } from "@/lib/api";
 import {
   TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight,
   Download, Share2, FileText, Calendar, DollarSign,
@@ -39,66 +39,55 @@ export default function AnalyticsPage() {
       case "90 days": startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000); break;
       default: startDate = new Date(now.getFullYear(), 0, 1); break;
     }
+
     const fetchData = async () => {
-      const { data: bookings } = await insforge.database
-        .from("bookings")
-        .select("*, services(name)")
-        .eq("owner_id", user.id)
-        .gte("scheduled_at", startDate.toISOString())
-        .order("scheduled_at", { ascending: true });
-      if (!bookings || bookings.length === 0) {
-        setRevenueData([]);
-        setServiceStats([]);
-        setTotalRevenue(0);
-        setTotalBookings(0);
-        setTopClients([]);
-        setBookingStatuses([]);
+      const { data } = await apiFetch<{
+        totalRevenue: number;
+        totalBookings: number;
+        completionRate: number;
+        serviceStats: { name: string; bookings: number; revenue: number }[];
+        topClients: { name: string; phone: string; bookings: number; spend: number }[];
+        statusCounts: { completed: number; cancelled: number; "no-show": number; pending: number };
+        raw: any[];
+      }>(`/analytics/${user.id}?from=${startDate.toISOString()}&to=${now.toISOString()}`);
+
+      if (!data || !data.raw || data.raw.length === 0) {
+        setRevenueData([]); setServiceStats([]); setTotalRevenue(0);
+        setTotalBookings(0); setTopClients([]); setBookingStatuses([]);
         setLoading(false);
         return;
       }
+
       const revenue: Record<string, number> = {};
-      const services: Record<string, { bookings: number; revenue: number }> = {};
-      const clients: Record<string, { name: string; bookings: number; spend: number }> = {};
-      const statuses: Record<string, number> = { Completed: 0, Cancelled: 0, "No-Show": 0, Pending: 0 };
-      bookings.forEach((b: any) => {
+      data.raw.forEach((b: any) => {
         const date = new Date(b.scheduled_at);
         let label: string;
         if (range === "7 days") label = date.toLocaleDateString("en-US", { weekday: "short" });
         else if (range === "30 days") {
           const week = Math.ceil((date.getDate() - startDate.getDate() + 1) / 7);
-          label = `W${week}`;
+          label = `W${Math.max(1, week)}`;
         } else label = date.toLocaleDateString("en-US", { month: "short" });
-        revenue[label] = (revenue[label] || 0) + (b.amount || 0);
-        const svcName = b.services?.name || "Unknown";
-        if (!services[svcName]) services[svcName] = { bookings: 0, revenue: 0 };
-        services[svcName].bookings++;
-        services[svcName].revenue += (b.amount || 0);
-        if (b.client_name) {
-          if (!clients[b.client_name]) clients[b.client_name] = { name: b.client_name, bookings: 0, spend: 0 };
-          clients[b.client_name].bookings++;
-          clients[b.client_name].spend += (b.amount || 0);
-        }
-        const status = b.status === "confirmed" ? "Completed" : b.status === "cancelled" ? "Cancelled" : b.status === "no_show" ? "No-Show" : "Pending";
-        statuses[status]++;
+        revenue[label] = (revenue[label] || 0) + Number(b.amount || 0);
       });
+
       const revenueArr = Object.entries(revenue).map(([label, value]) => ({ label, value, date: label }));
-      const serviceArr = Object.entries(services).map(([name, data]) => ({ name, ...data })).sort((a, b) => b.bookings - a.bookings);
-      const clientArr = Object.values(clients).sort((a, b) => b.spend - a.spend).slice(0, 5);
-      const total = bookings.length;
-      const statusArr = [
-        { label: "Completed", count: statuses["Completed"], pct: total > 0 ? Math.round((statuses["Completed"] / total) * 100) : 0, color: "bg-green-500" },
-        { label: "Cancelled", count: statuses["Cancelled"], pct: total > 0 ? Math.round((statuses["Cancelled"] / total) * 100) : 0, color: "bg-red-400" },
-        { label: "No-Show", count: statuses["No-Show"], pct: total > 0 ? Math.round((statuses["No-Show"] / total) * 100) : 0, color: "bg-orange-400" },
-        { label: "Pending", count: statuses["Pending"], pct: total > 0 ? Math.round((statuses["Pending"] / total) * 100) : 0, color: "bg-yellow-400" },
-      ];
+      const sc = data.statusCounts;
+      const total = data.totalBookings;
+
       setRevenueData(revenueArr);
-      setServiceStats(serviceArr);
-      setTotalRevenue(revenueArr.reduce((sum, d) => sum + d.value, 0));
+      setServiceStats(data.serviceStats);
+      setTotalRevenue(data.totalRevenue);
       setTotalBookings(total);
-      setTopClients(clientArr);
-      setBookingStatuses(statusArr);
+      setTopClients(data.topClients.map(c => ({ name: c.name, bookings: c.bookings, spend: c.spend })));
+      setBookingStatuses([
+        { label: "Completed", count: sc.completed, pct: total > 0 ? Math.round((sc.completed / total) * 100) : 0, color: "bg-green-500" },
+        { label: "Cancelled", count: sc.cancelled, pct: total > 0 ? Math.round((sc.cancelled / total) * 100) : 0, color: "bg-red-400" },
+        { label: "No-Show", count: sc["no-show"], pct: total > 0 ? Math.round((sc["no-show"] / total) * 100) : 0, color: "bg-orange-400" },
+        { label: "Pending", count: sc.pending, pct: total > 0 ? Math.round((sc.pending / total) * 100) : 0, color: "bg-yellow-400" },
+      ]);
       setLoading(false);
     };
+
     fetchData();
   }, [user, range]);
 
