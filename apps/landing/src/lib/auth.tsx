@@ -20,7 +20,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     insforge.auth.getCurrentUser().then(({ data }) => {
-      setUser(data ?? null);
+      setUser(data?.user ?? null);
       setLoading(false);
     });
   }, []);

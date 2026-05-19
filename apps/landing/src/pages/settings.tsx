@@ -72,8 +72,8 @@ export default function SettingsPage() {
       setBusinessName(profile.business_name ?? "");
       setBusinessPhone(profile.phone ?? "");
       setBusinessLocation(profile.location ?? "");
-      setCoverUrl((profile as Record<string, unknown>).cover_url as string ?? "");
-      setLogoUrl((profile as Record<string, unknown>).logo_url as string ?? "");
+      setCoverUrl(profile.cover_url ?? "");
+      setLogoUrl(profile.logo_url ?? "");
     }
     if (user) {
       setBusinessEmail(user.email ?? "");
