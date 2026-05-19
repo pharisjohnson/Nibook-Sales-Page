@@ -147,7 +147,7 @@ export default function BookingStorePage() {
         </Link>
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-muted-foreground">Powered by</span>
-          <img src="/nibook-icon.png" alt="Nibook" className="h-5 w-5 rounded-md object-cover" />
+          <img src="/nibook-icon.png" alt="Nibook" className="h-9 w-9 rounded-md object-cover" />
         </div>
         <div className="flex items-center gap-2">
           <button

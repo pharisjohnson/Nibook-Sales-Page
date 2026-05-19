@@ -87,15 +87,6 @@ export function Hero() {
               transition={{ duration: 0.5, delay: 0.45 }}
               className="mt-8 flex flex-col items-center lg:items-start gap-2"
             >
-              <div className="flex items-center gap-1 text-accent">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <Star key={i} className="w-4 h-4 fill-current" />
-                ))}
-              </div>
-              <p className="text-sm text-muted-foreground">
-                <span className="text-foreground font-bold">500+</span> service providers ·{" "}
-                <span className="text-foreground font-bold">KES 2M+</span> in bookings processed
-              </p>
             </motion.div>
 
             {/* Trust badges */}

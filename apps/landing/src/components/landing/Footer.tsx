@@ -9,7 +9,7 @@ export function Footer() {
           {/* Brand */}
           <div className="col-span-1 md:col-span-2">
             <Link href="/" className="flex items-center mb-4 group inline-flex">
-              <img src="/nibook-wordmark.png" alt="Nibook" className="h-9 w-auto brightness-0 invert group-hover:opacity-90 transition-opacity" />
+              <img src="/nibook-wordmark.png" alt="Nibook" className="h-16 w-auto brightness-0 invert group-hover:opacity-90 transition-opacity" />
             </Link>
             <p className="text-white/60 max-w-sm mb-6 leading-relaxed">
               The professional appointment booking and business management platform built specifically for service providers in East Africa.

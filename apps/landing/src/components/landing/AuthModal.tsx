@@ -57,7 +57,7 @@ export function AuthModal({ open, onClose, defaultTab = "signin" }: AuthModalPro
         {/* Header gradient */}
         <div className="bg-gradient-to-br from-primary to-primary/80 p-6 text-white">
           <div className="flex items-center mb-3">
-            <img src="/nibook-icon.png" alt="Nibook" className="h-10 w-10 rounded-xl object-cover" />
+            <img src="/nibook-icon.png" alt="Nibook" className="h-[72px] w-[72px] rounded-xl object-cover" />
           </div>
           <DialogHeader>
             <DialogTitle className="text-white text-xl">

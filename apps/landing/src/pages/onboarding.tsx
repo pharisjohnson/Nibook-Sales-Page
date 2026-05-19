@@ -100,7 +100,7 @@ export default function OnboardingPage() {
     <div className="min-h-screen bg-gradient-to-br from-primary/5 via-white to-primary/10 flex flex-col items-center justify-center px-4 py-12">
       {/* Logo */}
       <div className="flex items-center mb-8">
-        <img src="/nibook-wordmark.png" alt="Nibook" className="h-9 w-auto" />
+        <img src="/nibook-wordmark.png" alt="Nibook" className="h-16 w-auto" />
       </div>
 
       <div className="w-full max-w-lg">
