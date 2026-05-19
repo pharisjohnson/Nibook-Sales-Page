@@ -1,6 +1,13 @@
-import { createClient } from '@insforge/sdk'
+import { createClient } from "@insforge/sdk";
+
+const insforgeUrl = import.meta.env.VITE_INSFORGE_URL as string;
+const insforgeKey = import.meta.env.VITE_INSFORGE_ANON_KEY as string;
+
+if (!insforgeUrl || !insforgeKey) {
+  throw new Error("Missing VITE_INSFORGE_URL or VITE_INSFORGE_ANON_KEY");
+}
 
 export const insforge = createClient({
-  baseUrl: import.meta.env.VITE_INSFORGE_URL,
-  anonKey: import.meta.env.VITE_INSFORGE_ANON_KEY,
-})
+  baseUrl: insforgeUrl,
+  anonKey: insforgeKey,
+});

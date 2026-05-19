@@ -72,7 +72,6 @@
     "zod": "catalog:"
   },
   "dependencies": {
-    "@insforge/sdk": "^1.2.5",
-    "@supabase/supabase-js": "^2.103.0"
+    "@insforge/sdk": "^1.2.9"
   }
 }

@@ -17,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { useProfile } from "@/lib/profile";
 import { insforge } from "@/lib/insforge";
+import { apiFetch } from "@/lib/api";
 
 type BookingStatus = "Confirmed" | "Pending" | "Cancelled";
 type Booking = {
@@ -51,6 +52,7 @@ export default function DashboardHome() {
   const [showBookingPage, setShowBookingPage] = useState(false);
   const [copied, setCopied] = useState(false);
   const [statModal, setStatModal] = useState<"revenue" | "bookings" | "completion" | "topservice" | null>(null);
+  const [showUpgrade, setShowUpgrade] = useState(false);
 
   const firstName = profile?.business_name?.split(" ")[0] ?? user?.email?.split("@")[0] ?? "there";
   const bookingSlug = profile?.slug ?? "your-business";
@@ -87,15 +89,10 @@ export default function DashboardHome() {
   useEffect(() => {
     if (!user) return;
     setBookingsLoading(true);
-    insforge.database
-      .from("bookings")
-      .select("*, services(name)")
-      .eq("owner_id", user.id)
-      .order("scheduled_at", { ascending: true })
-      .limit(10)
-      .then(({ data }) => {
-        if (data && data.length > 0) {
-          const mapped: Booking[] = data.map((b: any) => {
+    apiFetch<{ data: any[] }>(`/bookings?owner_id=${user.id}&limit=10`)
+      .then(({ data: res }) => {
+        if (res?.data && res.data.length > 0) {
+          const mapped: Booking[] = res.data.map((b: any) => {
             const dt = b.scheduled_at ? new Date(b.scheduled_at) : null;
             const isToday = dt ? new Date().toDateString() === dt.toDateString() : false;
             const isTomorrow = dt ? new Date(Date.now() + 86400000).toDateString() === dt.toDateString() : false;

@@ -15,13 +15,14 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { UserPlus, MoreHorizontal, Mail, Clock, Crown, Shield, Users, AlertCircle } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
-import { insforge } from "@/lib/insforge";
-import { UserPlus, MoreHorizontal, Mail, Clock, Crown, Shield, Users, AlertCircle, Loader2 } from "lucide-react";
+import { apiFetch } from "@/lib/api";
 
 type Role = "Owner" | "Admin" | "Staff";
 interface Member {
-  id: number;
+  id: string;
   name: string;
   email: string;
   role: Role;
@@ -29,8 +30,13 @@ interface Member {
   joinedDate: string;
   status: "active" | "pending";
 }
+interface Invite {
+  id: string;
+  email: string;
+  role: Role;
+  sentAt: string;
+}
 
-type Invite = { id: number; email: string; role: Role; sentAt: string };
 
 const roleConfig: Record<Role, { color: string; icon: React.ElementType }> = {
   Owner: { color: "bg-yellow-100 text-yellow-800 border-yellow-200", icon: Crown },
@@ -39,6 +45,7 @@ const roleConfig: Record<Role, { color: string; icon: React.ElementType }> = {
 };
 
 export default function TeamPage() {
+  const { toast } = useToast();
   const { user } = useAuth();
   const [members, setMembers] = useState<Member[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
@@ -48,68 +55,66 @@ export default function TeamPage() {
   const [inviteRole, setInviteRole] = useState<Role>("Staff");
   const [inviteError, setInviteError] = useState("");
 
-  const totalSeats = 3;
+  const totalSeats = 5;
   const usedSeats = members.length;
 
   useEffect(() => {
     if (!user) return;
     setLoading(true);
-    Promise.all([
-      insforge.database.from("team_members").select("*").eq("owner_id", user.id),
-      insforge.database.from("team_invites").select("*").eq("owner_id", user.id).eq("status", "pending"),
-    ]).then(([membersRes, invitesRes]) => {
-      const membersData = (membersRes.data || []).map((m: any) => ({
+    apiFetch<{ members: any[]; invites: any[] }>(`/team/${user.id}`).then(({ data }) => {
+      const membersData = data?.members ?? [];
+      const invitesData = data?.invites ?? [];
+      setMembers(membersData.map((m: any) => ({
         id: m.id,
-        name: m.name || m.email.split("@")[0],
+        name: m.name,
         email: m.email,
         role: m.role as Role,
-        avatar: `https://i.pravatar.cc/150?u=${m.email}`,
+        avatar: m.avatar_url ?? "",
         joinedDate: new Date(m.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" }),
-        status: "active" as const,
-      }));
-      const invitesData = (invitesRes.data || []).map((i: any) => ({
+        status: m.status as "active" | "pending",
+      })));
+      setInvites(invitesData.map((i: any) => ({
         id: i.id,
         email: i.email,
         role: i.role as Role,
-        sentAt: new Date(i.created_at).toLocaleDateString(),
-      }));
-      setMembers(membersData);
-      setInvites(invitesData);
+        sentAt: new Date(i.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      })));
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [user]);
 
-  const handleInvite = () => {
+  const handleInvite = async () => {
     if (!inviteEmail.trim()) { setInviteError("Email is required."); return; }
     if (!/\S+@\S+\.\S+/.test(inviteEmail)) { setInviteError("Please enter a valid email."); return; }
     if (usedSeats >= totalSeats) { setInviteError("Seat limit reached. Upgrade to Pro to add more."); return; }
-    insforge.database.from("team_invites").insert({
-      email: inviteEmail,
-      role: inviteRole,
-      owner_id: user?.id,
-      status: "pending",
-    }).then(() => {
-      setInvites([...invites, { id: Date.now(), email: inviteEmail, role: inviteRole, sentAt: "just now" }]);
-      setInviteEmail("");
-      setInviteRole("Staff");
-      setInviteError("");
-      setInviteOpen(false);
+    if (!user) return;
+    const { data: res, error } = await apiFetch<{ data: any }>(`/team/${user.id}/invite`, {
+      method: "POST",
+      body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
     });
+    if (error) { setInviteError(error.includes("409") ? "This email already has a pending invite." : "Failed to send invite."); return; }
+    setInvites([{ id: res?.data?.id ?? String(Date.now()), email: inviteEmail, role: inviteRole, sentAt: "just now" }, ...invites]);
+    toast({ title: "Invitation sent", description: `${inviteEmail} will receive an email to join.` });
+    setInviteEmail("");
+    setInviteRole("Staff");
+    setInviteError("");
+    setInviteOpen(false);
   };
 
-  const changeRole = (id: number, role: Role) => {
+  const changeRole = async (id: string, role: Role) => {
+    await apiFetch(`/team/${user?.id}/members/${id}`, { method: "PATCH", body: JSON.stringify({ role }) });
     setMembers(members.map(m => m.id === id ? { ...m, role } : m));
-    insforge.database.from("team_members").update({ role }).eq("id", id);
   };
 
-  const removeMember = (id: number) => {
+  const removeMember = async (id: string) => {
+    await apiFetch(`/team/${user?.id}/members/${id}`, { method: "DELETE" });
     setMembers(members.filter(m => m.id !== id));
-    insforge.database.from("team_members").delete().eq("id", id);
+    toast({ title: "Member removed" });
   };
 
-  const cancelInvite = (id: number) => {
+  const cancelInvite = async (id: string) => {
+    await apiFetch(`/team/${user?.id}/invites/${id}`, { method: "DELETE" });
     setInvites(invites.filter(i => i.id !== id));
-    insforge.database.from("team_invites").delete().eq("id", id);
   };
 
   return (
@@ -145,32 +150,29 @@ export default function TeamPage() {
 
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
         <h2 className="text-lg font-semibold">Active Members</h2>
-        {loading ? (
-          <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
-        ) : members.length > 0 ? (
-          <Card className="shadow-sm overflow-hidden">
-            <div className="divide-y">
-              {members.map((member) => {
-                const RoleIcon = roleConfig[member.role].icon;
-                return (
-                  <div key={member.id} className="p-5 flex items-center gap-4 hover:bg-muted/30 transition-colors">
-                    <Avatar className="h-11 w-11">
-                      <AvatarImage src={member.avatar} />
-                      <AvatarFallback className="bg-primary/10 text-primary font-semibold">
-                        {member.name.split(" ").map(n => n[0]).join("")}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-semibold truncate">{member.name}</p>
-                        <Badge variant="outline" className={`text-xs ${roleConfig[member.role].color}`}>
-                          <RoleIcon className="w-3 h-3 mr-1" />
-                          {member.role}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground truncate">{member.email}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">Joined {member.joinedDate}</p>
+        <Card className="shadow-sm overflow-hidden">
+          <div className="divide-y">
+            {members.map((member) => {
+              const RoleIcon = roleConfig[member.role].icon;
+              return (
+                <div key={member.id} className="p-5 flex items-center gap-4 hover:bg-muted/30 transition-colors">
+                  <Avatar className="h-11 w-11">
+                    <AvatarImage src={member.avatar} />
+                    <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                      {member.name.split(" ").map(n => n[0]).join("")}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-semibold truncate">{member.name}</p>
+                      <Badge variant="outline" className={`text-xs ${roleConfig[member.role].color}`}>
+                        <RoleIcon className="w-3 h-3 mr-1" />
+                        {member.role}
+                      </Badge>
                     </div>
+                    <p className="text-sm text-muted-foreground truncate">{member.email}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Joined {member.joinedDate}</p>
+                  </div>
                   {member.role !== "Owner" && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -195,14 +197,6 @@ export default function TeamPage() {
             })}
           </div>
         </Card>
-      ) : (
-        <Card className="shadow-sm">
-          <CardContent className="p-10 text-center">
-            <Users className="w-8 h-8 mx-auto mb-2 text-muted-foreground opacity-20" />
-            <p className="text-muted-foreground">No team members yet. Invite someone to get started!</p>
-          </CardContent>
-        </Card>
-      )}
       </motion.div>
 
       {invites.length > 0 && (

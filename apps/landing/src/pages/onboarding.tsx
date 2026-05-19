@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth";
 import { useProfile } from "@/lib/profile";
-import { insforge } from "@/lib/insforge";
+import { apiFetch } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 const categories = [
@@ -78,12 +78,15 @@ export default function OnboardingPage() {
     setLoading(true);
     const validServices = services.filter(s => s.name.trim());
     for (const svc of validServices) {
-      await insforge.database.from("services").insert({
-        owner_id: user!.id,
-        name: svc.name.trim(),
-        price: parseFloat(svc.price) || 0,
-        duration_minutes: parseInt(svc.duration) || 60,
-        is_active: true,
+      await apiFetch("/services", {
+        method: "POST",
+        body: JSON.stringify({
+          owner_id: user!.id,
+          name: svc.name.trim(),
+          price: parseFloat(svc.price) || 0,
+          duration_minutes: parseInt(svc.duration) || 60,
+          is_active: true,
+        }),
       });
     }
     await updateProfile({ onboarding_completed: true });

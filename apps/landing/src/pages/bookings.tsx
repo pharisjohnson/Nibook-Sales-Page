@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/select";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from "@/lib/auth";
-import { insforge } from "@/lib/insforge";
+import { apiFetch } from "@/lib/api";
 import {
   Search, MoreHorizontal, Plus, Calendar as CalendarIcon, Filter,
   MessageSquare, Clock, DollarSign, CreditCard, User, CheckCircle2, AlertCircle,
@@ -27,9 +27,13 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
+const capitalize = (s: string) =>
+  s ? s.charAt(0).toUpperCase() + s.slice(1).replace(/-(\w)/g, (_: string, c: string) => `-${c.toUpperCase()}`) : s;
+
 type Status = "Confirmed" | "Pending" | "Completed" | "Cancelled" | "No-Show";
 type Booking = {
   id: string;
+  serviceId?: string;
   client: string;
   phone: string;
   service: string;
@@ -66,11 +70,42 @@ export default function BookingsPage() {
   const { toast } = useToast();
   const { user } = useAuth();
   const [bookings, setBookings] = useState<Booking[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [bookingsLoading, setBookingsLoading] = useState(true);
+  const [userServices, setUserServices] = useState<{ id: string; name: string; price: number }[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState<"all" | "upcoming" | "completed" | "cancelled">("all");
   const [modal, setModal] = useState<ModalType>(null);
   const [selected, setSelected] = useState<Booking | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    setBookingsLoading(true);
+    Promise.all([
+      apiFetch<{ data: any[] }>(`/bookings?owner_id=${user.id}&limit=200`),
+      apiFetch<{ data: any[] }>(`/services?owner_id=${user.id}`),
+    ]).then(([bookingsRes, servicesRes]) => {
+      if (bookingsRes.data?.data) {
+        setBookings(bookingsRes.data.data.map((b: any) => {
+          const dt = b.scheduled_at ? new Date(b.scheduled_at) : null;
+          return {
+            id: b.id,
+            serviceId: b.service_id,
+            client: b.client_name,
+            phone: b.client_phone ?? "—",
+            service: b.services?.name ?? "Service",
+            date: dt ? dt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—",
+            time: dt ? dt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : "—",
+            amount: Number(b.amount ?? 0).toLocaleString(),
+            payment: b.payment_status ?? "unpaid",
+            status: capitalize(b.status) as Status,
+            notes: b.notes ?? "",
+          };
+        }));
+      }
+      if (servicesRes.data?.data) setUserServices(servicesRes.data.data);
+      setBookingsLoading(false);
+    }).catch(() => setBookingsLoading(false));
+  }, [user]);
 
   // Message modal state
   const [message, setMessage] = useState("");
@@ -82,35 +117,6 @@ export default function BookingsPage() {
   // Add Booking state
   const [addForm, setAddForm] = useState({ client: "", phone: "", service: "Hair Braiding", date: "", time: "10:00 AM", payment: "M-Pesa", notes: "" });
   const [addError, setAddError] = useState("");
-
-  useEffect(() => {
-    if (!user) return;
-    setLoading(true);
-    insforge.database
-      .from("bookings")
-      .select("*, services(name)")
-      .eq("owner_id", user.id)
-      .order("scheduled_at", { ascending: false })
-      .then(({ data }) => {
-        if (data) {
-          const mapped: Booking[] = data.map((b: any) => ({
-            id: b.id,
-            client: b.client_name ?? "Client",
-            phone: b.client_phone ?? "",
-            service: b.services?.name ?? "Service",
-            date: b.scheduled_at ? new Date(b.scheduled_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "",
-            time: b.scheduled_at ? new Date(b.scheduled_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "",
-            amount: b.amount ? b.amount.toString() : "0",
-            payment: b.payment_method ?? "-",
-            status: b.status === "confirmed" ? "Confirmed" : b.status === "cancelled" ? "Cancelled" : b.status === "completed" ? "Completed" : b.status === "no_show" ? "No-Show" : "Pending",
-            notes: b.notes ?? "",
-          }));
-          setBookings(mapped);
-        }
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, [user]);
 
   const openModal = (type: ModalType, booking: Booking | null = null) => {
     setSelected(booking);
@@ -130,8 +136,10 @@ export default function BookingsPage() {
 
   const closeModal = () => { setModal(null); setSelected(null); };
 
-  const markBooking = (id: string, newStatus: "Completed" | "No-Show") => {
+  const markBooking = async (id: string, newStatus: "Completed" | "No-Show") => {
     const booking = bookings.find(b => b.id === id);
+    const dbStatus = newStatus === "No-Show" ? "no-show" : newStatus.toLowerCase();
+    await apiFetch(`/bookings/${id}`, { method: "PATCH", body: JSON.stringify({ status: dbStatus }) });
     setBookings(bookings.map(b => b.id === id ? { ...b, status: newStatus } : b));
     toast({
       title: newStatus === "Completed" ? "Marked as completed" : "Marked as no-show",
@@ -139,8 +147,9 @@ export default function BookingsPage() {
     });
   };
 
-  const handleCancel = () => {
+  const handleCancel = async () => {
     if (!selected) return;
+    await apiFetch(`/bookings/${selected.id}`, { method: "PATCH", body: JSON.stringify({ status: "cancelled" }) });
     setBookings(bookings.map(b => b.id === selected.id ? { ...b, status: "Cancelled" } : b));
     toast({ title: "Booking cancelled", description: `${selected.client}'s booking has been cancelled.` });
     closeModal();
@@ -152,12 +161,14 @@ export default function BookingsPage() {
     closeModal();
   };
 
-  const handleReschedule = () => {
+  const handleReschedule = async () => {
     if (!rescheduleDate || !rescheduleTime) {
       toast({ title: "Missing fields", description: "Please select both a date and time.", variant: "destructive" });
       return;
     }
     const formatted = new Date(rescheduleDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    const isoDate = new Date(`${rescheduleDate}T${rescheduleTime}`).toISOString();
+    await apiFetch(`/bookings/${selected!.id}`, { method: "PATCH", body: JSON.stringify({ scheduled_at: isoDate, status: "confirmed" }) });
     setBookings(bookings.map(b =>
       b.id === selected?.id ? { ...b, date: formatted, time: rescheduleTime, status: "Confirmed" } : b
     ));
@@ -165,15 +176,35 @@ export default function BookingsPage() {
     closeModal();
   };
 
-  const handleAddBooking = () => {
+  const handleAddBooking = async () => {
     if (!addForm.client.trim()) { setAddError("Client name is required."); return; }
     if (!addForm.date) { setAddError("Please select a date."); return; }
+    if (!user) return;
     setAddError("");
     const formatted = new Date(addForm.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    const svc = userServices.find(s => s.name === addForm.service);
+    const isoScheduled = new Date(`${addForm.date}T${addForm.time}`).toISOString();
+    const rawAmount = svc?.price ?? Number((AMOUNTS[addForm.service] ?? "0").replace(/,/g, ""));
+    const { data: bookingRes, error } = await apiFetch<{ data: any }>("/bookings", {
+      method: "POST",
+      body: JSON.stringify({
+        owner_id: user.id,
+        service_id: svc?.id ?? null,
+        client_name: addForm.client,
+        client_phone: addForm.phone || null,
+        scheduled_at: isoScheduled,
+        amount: rawAmount,
+        payment_status: "unpaid",
+        notes: addForm.notes || null,
+      }),
+    });
+    const data = bookingRes?.data;
+    if (error || !data) { setAddError("Failed to save booking. Please try again."); return; }
     const newBooking: Booking = {
-      id: `B${1000 + bookings.length + 1}`,
+      id: data.id,
+      serviceId: svc?.id,
       client: addForm.client,
-      phone: addForm.phone || "-",
+      phone: addForm.phone || "—",
       service: addForm.service,
       date: formatted,
       time: addForm.time,
@@ -356,7 +387,7 @@ export default function BookingsPage() {
 
         {/* Desktop table — table view only */}
         {viewMode === "table" && <div className="hidden md:block overflow-x-auto">
-          {loading ? (
+          {bookingsLoading ? (
             <div className="flex items-center justify-center py-20">
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
             </div>
@@ -452,7 +483,7 @@ export default function BookingsPage() {
 
         {/* Mobile card list — table view only */}
         {viewMode === "table" && <div className="md:hidden divide-y">
-          {loading ? (
+          {bookingsLoading ? (
             <div className="flex items-center justify-center py-20">
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
             </div>
@@ -531,7 +562,7 @@ export default function BookingsPage() {
         {/* Cards grid — cards view only */}
         {viewMode === "cards" && (
           <div className="p-4">
-            {loading ? (
+            {bookingsLoading ? (
               <div className="flex items-center justify-center py-20">
                 <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
               </div>

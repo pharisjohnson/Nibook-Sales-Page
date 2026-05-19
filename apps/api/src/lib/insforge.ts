@@ -1,24 +1,25 @@
-import { createClient, type InsForgeClient } from "@insforge/sdk";
+import { createClient } from "@insforge/sdk";
 
-let _client: InsForgeClient | null = null;
+const url =
+  process.env.INSFORGE_URL ??
+  process.env.VITE_INSFORGE_URL ??
+  "";
 
-export function getInsforgeAdmin(): InsForgeClient {
-  if (_client) return _client;
+const serviceKey =
+  process.env.INSFORGE_SERVICE_KEY ??
+  process.env.VITE_INSFORGE_ANON_KEY ??
+  "";
 
-  const insforgeUrl = process.env.INSFORGE_URL ?? "";
-  const insforgeApiKey = process.env.INSFORGE_API_KEY ?? "";
+let _client: ReturnType<typeof createClient> | null = null;
 
-  if (!insforgeUrl) {
-    throw new Error(
-      "Missing INSFORGE_URL environment variable. " +
-      "Please configure this to enable database features.",
-    );
+export function getInsforgeAdmin() {
+  if (!_client) {
+    if (!url || !serviceKey) {
+      throw new Error(
+        "Set INSFORGE_URL and INSFORGE_SERVICE_KEY (or VITE_INSFORGE_URL / VITE_INSFORGE_ANON_KEY) env vars.",
+      );
+    }
+    _client = createClient({ baseUrl: url, anonKey: serviceKey });
   }
-
-  _client = createClient({
-    baseUrl: insforgeUrl,
-    anonKey: insforgeApiKey || undefined,
-    isServerMode: true,
-  });
   return _client;
 }

@@ -23,7 +23,7 @@ import {
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
-import { insforge } from "@/lib/insforge";
+import { apiFetch } from "@/lib/api";
 
 const MAX_IMAGES = 2;
 
@@ -337,14 +337,10 @@ export default function ServicesPage() {
   useEffect(() => {
     if (!user) return;
     setLoadingServices(true);
-    insforge.database
-      .from("services")
-      .select("*")
-      .eq("owner_id", user.id)
-      .order("created_at", { ascending: true })
-      .then(({ data }) => {
-        if (data) {
-          setServices(data.map((s: any, i: number) => ({
+    apiFetch<{ data: any[] }>(`/services?owner_id=${user.id}`)
+      .then(({ data: res }) => {
+        if (res?.data) {
+          setServices(res.data.map((s: any, i: number) => ({
             id: s.id,
             name: s.name,
             price: Number(s.price ?? 0).toLocaleString(),
@@ -356,7 +352,7 @@ export default function ServicesPage() {
           })));
         }
         setLoadingServices(false);
-      });
+      }).catch(() => setLoadingServices(false));
   }, [user]);
 
   const openAdd = () => {
@@ -390,15 +386,10 @@ export default function ServicesPage() {
     const priceFormatted = priceNum.toLocaleString();
 
     if (editingService) {
-      const { error } = await insforge.database
-        .from("services")
-        .update({
-          name: form.name.trim(),
-          price: priceNum,
-          duration_minutes: Number(form.duration),
-          image_url: formImages[0] ?? null,
-        })
-        .eq("id", editingService.id);
+      const { error } = await apiFetch(`/services/${editingService.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ name: form.name.trim(), price: priceNum, duration_minutes: Number(form.duration), image_url: formImages[0] ?? null }),
+      });
       if (error) { setFormError("Failed to update service."); return; }
       setServices(services.map(s =>
         s.id === editingService.id
@@ -407,21 +398,13 @@ export default function ServicesPage() {
       ));
       toast({ title: "Service updated", description: `"${form.name}" has been updated.` });
     } else {
-      const { data, error } = await insforge.database
-        .from("services")
-        .insert({
-          owner_id: user.id,
-          name: form.name.trim(),
-          price: priceNum,
-          duration_minutes: Number(form.duration),
-          image_url: formImages[0] ?? null,
-          is_active: true,
-        })
-        .select()
-        .single();
-      if (error) { setFormError("Failed to add service."); return; }
+      const { data: svcRes, error } = await apiFetch<{ data: any }>("/services", {
+        method: "POST",
+        body: JSON.stringify({ owner_id: user.id, name: form.name.trim(), price: priceNum, duration_minutes: Number(form.duration), image_url: formImages[0] ?? null, is_active: true }),
+      });
+      if (error || !svcRes?.data) { setFormError("Failed to add service."); return; }
       const newService: Service = {
-        id: data.id,
+        id: svcRes.data.id,
         name: form.name,
         price: priceFormatted,
         duration: Number(form.duration),
@@ -438,7 +421,7 @@ export default function ServicesPage() {
 
   const deleteService = async (id: string) => {
     const svc = services.find(s => s.id === id);
-    await insforge.database.from("services").delete().eq("id", id);
+    await apiFetch(`/services/${id}`, { method: "DELETE" });
     setServices(services.filter(s => s.id !== id));
     toast({ title: "Service deleted", description: `"${svc?.name}" has been removed.` });
   };
@@ -447,7 +430,7 @@ export default function ServicesPage() {
     const svc = services.find(s => s.id === id);
     if (!svc) return;
     const newActive = !svc.active;
-    await insforge.database.from("services").update({ is_active: newActive }).eq("id", id);
+    await apiFetch(`/services/${id}`, { method: "PATCH", body: JSON.stringify({ is_active: newActive }) });
     setServices(services.map(s => s.id === id ? { ...s, active: newActive } : s));
   };
 

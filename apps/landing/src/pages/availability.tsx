@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Clock, Save, Info, Ban, X, CalendarOff, Plus, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/auth";
+import { apiFetch } from "@/lib/api";
 
 const timeOptions = [
   "6:00 AM", "7:00 AM", "8:00 AM", "9:00 AM", "10:00 AM", "11:00 AM",
@@ -34,12 +36,31 @@ const initialBlackouts: BlackoutDate[] = [
 
 export default function AvailabilityPage() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [schedule, setSchedule] = useState(initialSchedule);
   const [hasChanges, setHasChanges] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [blackouts, setBlackouts] = useState<BlackoutDate[]>(initialBlackouts);
   const [newDate, setNewDate] = useState("");
   const [newReason, setNewReason] = useState("");
   const [dateError, setDateError] = useState("");
+
+  useEffect(() => {
+    if (!user) return;
+    apiFetch<{ schedule: any[]; blackouts: any[] }>(`/availability/${user.id}`).then(({ data }) => {
+      if (data?.schedule && data.schedule.length > 0) {
+        setSchedule(data.schedule.map((d: any) => ({
+          day: d.day_name,
+          active: d.is_active,
+          start: d.start_time,
+          end: d.end_time,
+        })));
+      }
+      if (data?.blackouts) {
+        setBlackouts(data.blackouts.map((b: any) => ({ id: b.id, date: b.date, reason: b.reason ?? "" })));
+      }
+    });
+  }, [user]);
 
   const toggleDay = (index: number) => {
     const s = [...schedule];
@@ -55,18 +76,26 @@ export default function AvailabilityPage() {
     setHasChanges(true);
   };
 
-  const addBlackout = () => {
+  const addBlackout = async () => {
     if (!newDate) { setDateError("Please pick a date."); return; }
     if (blackouts.some(b => b.date === newDate)) { setDateError("This date is already blocked."); return; }
+    if (!user) return;
     setDateError("");
-    setBlackouts([...blackouts, { id: Date.now(), date: newDate, reason: newReason.trim() || "Time off" }]);
+    const reason = newReason.trim() || "Time off";
+    const { data: blackoutRes } = await apiFetch<{ data: any }>(`/availability/${user.id}/blackouts`, {
+      method: "POST",
+      body: JSON.stringify({ date: newDate, reason }),
+    });
+    const newId = blackoutRes?.data?.id ?? Date.now();
+    setBlackouts([...blackouts, { id: newId, date: newDate, reason }]);
     setNewDate("");
     setNewReason("");
     setHasChanges(true);
     toast({ title: "Date blocked", description: "Clients cannot book on this date." });
   };
 
-  const removeBlackout = (id: number) => {
+  const removeBlackout = async (id: number) => {
+    await apiFetch(`/availability/${user?.id}/blackouts/${id}`, { method: "DELETE" });
     setBlackouts(blackouts.filter(b => b.id !== id));
     setHasChanges(true);
   };
@@ -84,7 +113,21 @@ export default function AvailabilityPage() {
         <Button
           className="gap-2 shadow-md transition-all"
           disabled={!hasChanges}
-          onClick={() => { setHasChanges(false); toast({ title: "Availability saved" }); }}
+          onClick={async () => {
+            if (!user) return;
+            setSaving(true);
+            await apiFetch(`/availability/${user.id}/schedule`, {
+              method: "PUT",
+              body: JSON.stringify({
+                schedule: schedule.map((s, i) => ({
+                  day_name: s.day, is_active: s.active, start_time: s.start, end_time: s.end, sort_order: i,
+                })),
+              }),
+            });
+            setSaving(false);
+            setHasChanges(false);
+            toast({ title: "Availability saved", description: "Your schedule has been updated." });
+          }}
         >
           <Save className="w-4 h-4" />
           Save Changes
