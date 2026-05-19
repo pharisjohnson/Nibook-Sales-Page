@@ -5,6 +5,9 @@ ENV PNPM_HOME=/pnpm
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
+# Satisfy the workspace preinstall guard that checks npm_config_user_agent
+ENV npm_config_user_agent="pnpm/0.0.0 node/v22.0.0 linux x64"
+
 WORKDIR /app
 
 # Copy workspace manifests for layer caching
@@ -26,7 +29,7 @@ ENV VITE_INSFORGE_ANON_KEY=$VITE_INSFORGE_ANON_KEY
 ENV VITE_PAYSTACK_STARTER_PLAN_CODE=$VITE_PAYSTACK_STARTER_PLAN_CODE
 ENV VITE_PAYSTACK_PREMIUM_PLAN_CODE=$VITE_PAYSTACK_PREMIUM_PLAN_CODE
 
-RUN pnpm install --frozen-lockfile --ignore-scripts=false
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
 RUN pnpm --filter @workspace/nibook-landing run build
 

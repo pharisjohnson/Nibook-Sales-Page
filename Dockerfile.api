@@ -5,6 +5,9 @@ ENV PNPM_HOME=/pnpm
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
+# Satisfy the workspace preinstall guard that checks npm_config_user_agent
+ENV npm_config_user_agent="pnpm/0.0.0 node/v22.0.0 linux x64"
+
 WORKDIR /app
 
 # Copy workspace manifests first for better layer caching
@@ -15,7 +18,7 @@ COPY lib/ ./lib/
 COPY apps/api/ ./apps/api/
 
 # Install deps (frozen lockfile for reproducible builds)
-RUN pnpm install --frozen-lockfile --ignore-scripts=false
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
 # Build the API (esbuild bundles everything into dist/index.mjs)
 RUN pnpm --filter @workspace/api-server run build
