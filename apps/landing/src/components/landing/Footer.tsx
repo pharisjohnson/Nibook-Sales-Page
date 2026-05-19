@@ -8,11 +8,8 @@ export function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
           {/* Brand */}
           <div className="col-span-1 md:col-span-2">
-            <Link href="/" className="flex items-center gap-2 mb-4 group inline-flex">
-              <div className="bg-primary text-white p-1.5 rounded-lg group-hover:scale-105 transition-transform">
-                <Calendar className="w-5 h-5" />
-              </div>
-              <span className="font-bold text-xl tracking-tight text-white">Nibook</span>
+            <Link href="/" className="flex items-center mb-4 group inline-flex">
+              <img src="/nibook-wordmark.png" alt="Nibook" className="h-9 w-auto brightness-0 invert group-hover:opacity-90 transition-opacity" />
             </Link>
             <p className="text-white/60 max-w-sm mb-6 leading-relaxed">
               The professional appointment booking and business management platform built specifically for service providers in East Africa.

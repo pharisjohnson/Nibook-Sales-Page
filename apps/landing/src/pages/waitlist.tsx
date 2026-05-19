@@ -44,11 +44,8 @@ export default function WaitlistPage() {
         <Link href="/">
           <button className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
             <ArrowLeft className="w-4 h-4" />
-            <div className="flex items-center gap-1.5">
-              <div className="bg-primary text-white p-1 rounded-md">
-                <Calendar className="w-4 h-4" />
-              </div>
-              <span className="font-bold text-foreground">Nibook</span>
+            <div className="flex items-center">
+              <img src="/nibook-wordmark.png" alt="Nibook" className="h-7 w-auto" />
             </div>
           </button>
         </Link>

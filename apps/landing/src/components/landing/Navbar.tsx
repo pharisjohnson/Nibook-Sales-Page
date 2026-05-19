@@ -45,11 +45,8 @@ export function Navbar() {
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2 group">
-            <div className="bg-primary text-white p-1.5 rounded-lg group-hover:scale-105 transition-transform">
-              <Calendar className="w-5 h-5" />
-            </div>
-            <span className="font-bold text-xl tracking-tight text-foreground">Nibook</span>
+          <Link href="/" className="flex items-center group">
+            <img src="/nibook-wordmark.png" alt="Nibook" className="h-9 w-auto group-hover:opacity-90 transition-opacity" />
           </Link>
 
           {/* Desktop Nav */}

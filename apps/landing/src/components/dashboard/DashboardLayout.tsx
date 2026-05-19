@@ -47,11 +47,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       >
         {/* Header */}
         <div className="p-6 border-b">
-          <Link href="/dashboard" className="flex items-center gap-2 mb-4">
-            <div className="bg-primary text-white p-1.5 rounded-lg">
-              <Calendar className="w-5 h-5" />
-            </div>
-            <span className="font-bold text-xl tracking-tight text-foreground">Nibook</span>
+          <Link href="/dashboard" className="flex items-center mb-4">
+            <img src="/nibook-wordmark.png" alt="Nibook" className="h-8 w-auto" />
           </Link>
           <div className="px-1">
             <p className="font-semibold text-sm truncate">{displayName}</p>
@@ -126,11 +123,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <main className="flex-1 flex flex-col min-w-0 max-w-full">
         {/* Mobile Header */}
         <div className="md:hidden flex items-center justify-between p-4 border-b bg-card sticky top-0 z-30">
-          <div className="flex items-center gap-2">
-            <div className="bg-primary text-white p-1 rounded-md">
-              <Calendar className="w-4 h-4" />
-            </div>
-            <span className="font-bold text-lg">Nibook</span>
+          <div className="flex items-center">
+            <img src="/nibook-wordmark.png" alt="Nibook" className="h-7 w-auto" />
           </div>
           <button
             onClick={() => setSidebarOpen(true)}

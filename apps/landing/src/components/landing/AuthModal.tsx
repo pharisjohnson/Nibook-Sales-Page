@@ -56,11 +56,8 @@ export function AuthModal({ open, onClose, defaultTab = "signin" }: AuthModalPro
       <DialogContent className="sm:max-w-sm p-0 overflow-hidden">
         {/* Header gradient */}
         <div className="bg-gradient-to-br from-primary to-primary/80 p-6 text-white">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="bg-white/20 rounded-lg p-1.5">
-              <Calendar className="w-4 h-4" />
-            </div>
-            <span className="font-bold text-lg">Nibook</span>
+          <div className="flex items-center mb-3">
+            <img src="/nibook-icon.png" alt="Nibook" className="h-10 w-10 rounded-xl object-cover" />
           </div>
           <DialogHeader>
             <DialogTitle className="text-white text-xl">

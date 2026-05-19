@@ -145,9 +145,9 @@ export default function BookingStorePage() {
             <ArrowLeft className="w-4 h-4" />Back
           </button>
         </Link>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <span className="text-xs text-muted-foreground">Powered by</span>
-          <span className="font-bold text-sm text-primary">Nibook</span>
+          <img src="/nibook-icon.png" alt="Nibook" className="h-5 w-5 rounded-md object-cover" />
         </div>
         <div className="flex items-center gap-2">
           <button
