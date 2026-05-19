@@ -4,7 +4,7 @@ import { Link } from "wouter";
 import { Calendar, ArrowLeft, Mail, CheckCircle2, Loader2, Users, Zap, Bell } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { insforge } from "@/lib/insforge";
+import { apiFetch } from "@/lib/api";
 
 export default function WaitlistPage() {
   const [email, setEmail] = useState("");
@@ -19,15 +19,16 @@ export default function WaitlistPage() {
     setLoading(true);
     setError("");
     try {
-      const { error: err } = await insforge.database
-        .from("waitlist")
-        .insert({ email: email.trim().toLowerCase(), name: name.trim() || null });
-      if (err && err.code === "23505") {
-        setSubmitted(true);
-        return;
-      }
+      const { data: res, error: err } = await apiFetch("/waitlist", {
+        method: "POST",
+        body: JSON.stringify({ email: email.trim().toLowerCase(), name: name.trim() || undefined }),
+      });
       if (err) {
         setError("Something went wrong. Please try again.");
+        return;
+      }
+      if ((res as any)?.duplicate) {
+        setSubmitted(true);
         return;
       }
       setSubmitted(true);

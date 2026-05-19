@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Clock, Save, Info, Ban, X, CalendarOff, Plus, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
-import { insforge } from "@/lib/insforge";
+import { apiFetch } from "@/lib/api";
 
 const timeOptions = [
   "6:00 AM", "7:00 AM", "8:00 AM", "9:00 AM", "10:00 AM", "11:00 AM",
@@ -47,20 +47,17 @@ export default function AvailabilityPage() {
 
   useEffect(() => {
     if (!user) return;
-    Promise.all([
-      insforge.database.from("availability_schedules").select("*").eq("owner_id", user.id).order("sort_order"),
-      insforge.database.from("availability_blackouts").select("*").eq("owner_id", user.id).order("date"),
-    ]).then(([schedRes, blackRes]) => {
-      if (schedRes.data && schedRes.data.length > 0) {
-        setSchedule(schedRes.data.map((d: any) => ({
+    apiFetch<{ schedule: any[]; blackouts: any[] }>(`/availability/${user.id}`).then(({ data }) => {
+      if (data?.schedule && data.schedule.length > 0) {
+        setSchedule(data.schedule.map((d: any) => ({
           day: d.day_name,
           active: d.is_active,
           start: d.start_time,
           end: d.end_time,
         })));
       }
-      if (blackRes.data) {
-        setBlackouts(blackRes.data.map((b: any) => ({ id: b.id, date: b.date, reason: b.reason ?? "" })));
+      if (data?.blackouts) {
+        setBlackouts(data.blackouts.map((b: any) => ({ id: b.id, date: b.date, reason: b.reason ?? "" })));
       }
     });
   }, [user]);
@@ -85,11 +82,11 @@ export default function AvailabilityPage() {
     if (!user) return;
     setDateError("");
     const reason = newReason.trim() || "Time off";
-    const { data } = await insforge.database
-      .from("availability_blackouts")
-      .insert({ owner_id: user.id, date: newDate, reason })
-      .select().single();
-    const newId = data?.id ?? Date.now();
+    const { data: blackoutRes } = await apiFetch<{ data: any }>(`/availability/${user.id}/blackouts`, {
+      method: "POST",
+      body: JSON.stringify({ date: newDate, reason }),
+    });
+    const newId = blackoutRes?.data?.id ?? Date.now();
     setBlackouts([...blackouts, { id: newId, date: newDate, reason }]);
     setNewDate("");
     setNewReason("");
@@ -98,7 +95,7 @@ export default function AvailabilityPage() {
   };
 
   const removeBlackout = async (id: number) => {
-    await insforge.database.from("availability_blackouts").delete().eq("id", id);
+    await apiFetch(`/availability/${user?.id}/blackouts/${id}`, { method: "DELETE" });
     setBlackouts(blackouts.filter(b => b.id !== id));
     setHasChanges(true);
   };
@@ -119,17 +116,14 @@ export default function AvailabilityPage() {
           onClick={async () => {
             if (!user) return;
             setSaving(true);
-            await insforge.database.from("availability_schedules").delete().eq("owner_id", user.id);
-            await insforge.database.from("availability_schedules").insert(
-              schedule.map((s, i) => ({
-                owner_id: user.id,
-                day_name: s.day,
-                is_active: s.active,
-                start_time: s.start,
-                end_time: s.end,
-                sort_order: i,
-              }))
-            );
+            await apiFetch(`/availability/${user.id}/schedule`, {
+              method: "PUT",
+              body: JSON.stringify({
+                schedule: schedule.map((s, i) => ({
+                  day_name: s.day, is_active: s.active, start_time: s.start, end_time: s.end, sort_order: i,
+                })),
+              }),
+            });
             setSaving(false);
             setHasChanges(false);
             toast({ title: "Availability saved", description: "Your schedule has been updated." });

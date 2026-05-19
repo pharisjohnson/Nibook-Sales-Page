@@ -129,7 +129,7 @@ router.get("/payments/status/:reference", async (req: Request, res: Response) =>
 
   try {
     const payheroRes = await fetch(
-      `${PAYHERO_BASE}/transaction-status?reference=${encodeURIComponent(reference)}`,
+      `${PAYHERO_BASE}/transaction-status?reference=${encodeURIComponent(String(reference))}`,
       { headers: payheroHeaders() },
     );
 
