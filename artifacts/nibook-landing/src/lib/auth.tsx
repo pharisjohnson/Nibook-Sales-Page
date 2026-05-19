@@ -1,5 +1,5 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { insforge } from "./insforge";
+import { createContext, useContext, useState, type ReactNode } from "react";
+import { apiFetch, setSession, getStoredUser, clearSession } from "./api";
 
 export interface NibookUser {
   id: string;
@@ -17,50 +17,34 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-function toUser(raw: any): NibookUser | null {
-  if (!raw) return null;
-  return {
-    id: raw.id ?? "",
-    email: raw.email ?? "",
-    displayName: raw.displayName ?? raw.name ?? null,
-  };
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<NibookUser | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    insforge.auth.getCurrentUser()
-      .then(({ data }) => {
-        setUser(toUser(data?.user ?? null));
-      })
-      .catch(() => setUser(null))
-      .finally(() => setLoading(false));
-  }, []);
+  const [user, setUser] = useState<NibookUser | null>(() => getStoredUser());
+  const loading = false;
 
   async function signUp(email: string, password: string, businessName: string) {
-    const { data, error } = await insforge.auth.signUp({
-      email,
-      password,
-      name: businessName,
+    const { data, error } = await apiFetch<{ user: NibookUser; token: string }>("/auth/signup", {
+      method: "POST",
+      body: JSON.stringify({ email, password, businessName }),
     });
-    if (error) return { error: error.message };
-    const u = (data as any)?.user ?? (data as any);
-    setUser(toUser(u));
+    if (error || !data) return { error: error ?? "Sign up failed" };
+    setSession(data.user, data.token ?? "");
+    setUser(data.user);
     return { error: null };
   }
 
   async function signIn(email: string, password: string) {
-    const { data, error } = await insforge.auth.signInWithPassword({ email, password });
-    if (error) return { error: error.message };
-    const u = (data as any)?.user ?? (data as any);
-    setUser(toUser(u));
+    const { data, error } = await apiFetch<{ user: NibookUser; token: string }>("/auth/signin", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+    if (error || !data) return { error: error ?? "Sign in failed" };
+    setSession(data.user, data.token ?? "");
+    setUser(data.user);
     return { error: null };
   }
 
   async function signOut() {
-    await insforge.auth.signOut();
+    clearSession();
     setUser(null);
   }
 

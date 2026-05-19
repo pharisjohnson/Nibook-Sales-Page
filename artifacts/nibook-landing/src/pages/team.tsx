@@ -18,7 +18,7 @@ import {
 import { UserPlus, MoreHorizontal, Mail, Clock, Crown, Shield, Users, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
-import { insforge } from "@/lib/insforge";
+import { apiFetch } from "@/lib/api";
 
 type Role = "Owner" | "Admin" | "Staff";
 interface Member {
@@ -61,29 +61,24 @@ export default function TeamPage() {
   useEffect(() => {
     if (!user) return;
     setLoading(true);
-    Promise.all([
-      insforge.database.from("team_members").select("*").eq("owner_id", user.id).order("created_at"),
-      insforge.database.from("team_invites").select("*").eq("owner_id", user.id).order("created_at", { ascending: false }),
-    ]).then(([membersRes, invitesRes]) => {
-      if (membersRes.data) {
-        setMembers(membersRes.data.map((m: any) => ({
-          id: m.id,
-          name: m.name,
-          email: m.email,
-          role: m.role as Role,
-          avatar: m.avatar_url ?? "",
-          joinedDate: new Date(m.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" }),
-          status: m.status as "active" | "pending",
-        })));
-      }
-      if (invitesRes.data) {
-        setInvites(invitesRes.data.map((i: any) => ({
-          id: i.id,
-          email: i.email,
-          role: i.role as Role,
-          sentAt: new Date(i.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-        })));
-      }
+    apiFetch<{ members: any[]; invites: any[] }>(`/team/${user.id}`).then(({ data }) => {
+      const membersData = data?.members ?? [];
+      const invitesData = data?.invites ?? [];
+      setMembers(membersData.map((m: any) => ({
+        id: m.id,
+        name: m.name,
+        email: m.email,
+        role: m.role as Role,
+        avatar: m.avatar_url ?? "",
+        joinedDate: new Date(m.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" }),
+        status: m.status as "active" | "pending",
+      })));
+      setInvites(invitesData.map((i: any) => ({
+        id: i.id,
+        email: i.email,
+        role: i.role as Role,
+        sentAt: new Date(i.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      })));
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [user]);
@@ -93,12 +88,12 @@ export default function TeamPage() {
     if (!/\S+@\S+\.\S+/.test(inviteEmail)) { setInviteError("Please enter a valid email."); return; }
     if (usedSeats >= totalSeats) { setInviteError("Seat limit reached. Upgrade to Pro to add more."); return; }
     if (!user) return;
-    const { data, error } = await insforge.database
-      .from("team_invites")
-      .insert({ owner_id: user.id, email: inviteEmail, role: inviteRole })
-      .select().single();
-    if (error) { setInviteError("Failed to send invite. The email may already be invited."); return; }
-    setInvites([{ id: data.id, email: inviteEmail, role: inviteRole, sentAt: "just now" }, ...invites]);
+    const { data: res, error } = await apiFetch<{ data: any }>(`/team/${user.id}/invite`, {
+      method: "POST",
+      body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
+    });
+    if (error) { setInviteError(error.includes("409") ? "This email already has a pending invite." : "Failed to send invite."); return; }
+    setInvites([{ id: res?.data?.id ?? String(Date.now()), email: inviteEmail, role: inviteRole, sentAt: "just now" }, ...invites]);
     toast({ title: "Invitation sent", description: `${inviteEmail} will receive an email to join.` });
     setInviteEmail("");
     setInviteRole("Staff");
@@ -107,18 +102,18 @@ export default function TeamPage() {
   };
 
   const changeRole = async (id: string, role: Role) => {
-    await insforge.database.from("team_members").update({ role }).eq("id", id);
+    await apiFetch(`/team/${user?.id}/members/${id}`, { method: "PATCH", body: JSON.stringify({ role }) });
     setMembers(members.map(m => m.id === id ? { ...m, role } : m));
   };
 
   const removeMember = async (id: string) => {
-    await insforge.database.from("team_members").delete().eq("id", id);
+    await apiFetch(`/team/${user?.id}/members/${id}`, { method: "DELETE" });
     setMembers(members.filter(m => m.id !== id));
     toast({ title: "Member removed" });
   };
 
   const cancelInvite = async (id: string) => {
-    await insforge.database.from("team_invites").delete().eq("id", id);
+    await apiFetch(`/team/${user?.id}/invites/${id}`, { method: "DELETE" });
     setInvites(invites.filter(i => i.id !== id));
   };
 

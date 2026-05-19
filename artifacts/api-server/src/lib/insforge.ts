@@ -19,7 +19,7 @@ export function getInsforgeAdmin() {
         "Set INSFORGE_URL and INSFORGE_SERVICE_KEY (or VITE_INSFORGE_URL / VITE_INSFORGE_ANON_KEY) env vars.",
       );
     }
-    _client = createClient(url, serviceKey);
+    _client = createClient({ baseUrl: url, anonKey: serviceKey });
   }
   return _client;
 }

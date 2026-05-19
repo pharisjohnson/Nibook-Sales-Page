@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { insforge } from "./insforge";
+import { apiFetch } from "./api";
 import { useAuth } from "./auth";
 
 export interface Profile {
@@ -34,25 +34,20 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user) { setProfile(null); return; }
     setLoading(true);
-    insforge.database
-      .from("profiles")
-      .select("*")
-      .eq("id", user.id)
-      .single()
-      .then(({ data, error }) => {
-        if (!error && data) setProfile(data as Profile);
-        setLoading(false);
-      });
+    apiFetch<{ data: Profile }>(`/profile/${user.id}`).then(({ data }) => {
+      if (data?.data) setProfile(data.data);
+      setLoading(false);
+    });
   }, [user, tick]);
 
   async function updateProfile(updates: Partial<Omit<Profile, "id" | "created_at">>) {
     if (!user) return { error: "Not authenticated" };
-    const { error } = await insforge.database
-      .from("profiles")
-      .update(updates)
-      .eq("id", user.id);
-    if (!error) setTick(t => t + 1);
-    return { error: (error as any)?.message ?? null };
+    const { data, error } = await apiFetch<{ data: Profile }>(`/profile/${user.id}`, {
+      method: "PATCH",
+      body: JSON.stringify(updates),
+    });
+    if (!error && data?.data) setProfile(data.data);
+    return { error };
   }
 
   return (

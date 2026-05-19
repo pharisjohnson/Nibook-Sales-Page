@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
-import { insforge } from "@/lib/insforge";
+import { apiFetch } from "@/lib/api";
 
 const capitalize = (s: string) =>
   s ? s.charAt(0).toUpperCase() + s.slice(1).replace(/-(\w)/g, (_: string, c: string) => `-${c.toUpperCase()}`) : s;
@@ -82,19 +82,11 @@ export default function BookingsPage() {
     if (!user) return;
     setBookingsLoading(true);
     Promise.all([
-      insforge.database
-        .from("bookings")
-        .select("*, services(name, price)")
-        .eq("owner_id", user.id)
-        .order("scheduled_at", { ascending: false }),
-      insforge.database
-        .from("services")
-        .select("id, name, price")
-        .eq("owner_id", user.id)
-        .eq("is_active", true),
+      apiFetch<{ data: any[] }>(`/bookings?owner_id=${user.id}&limit=200`),
+      apiFetch<{ data: any[] }>(`/services?owner_id=${user.id}`),
     ]).then(([bookingsRes, servicesRes]) => {
-      if (bookingsRes.data) {
-        setBookings(bookingsRes.data.map((b: any) => {
+      if (bookingsRes.data?.data) {
+        setBookings(bookingsRes.data.data.map((b: any) => {
           const dt = b.scheduled_at ? new Date(b.scheduled_at) : null;
           return {
             id: b.id,
@@ -111,7 +103,7 @@ export default function BookingsPage() {
           };
         }));
       }
-      if (servicesRes.data) setUserServices(servicesRes.data);
+      if (servicesRes.data?.data) setUserServices(servicesRes.data.data);
       setBookingsLoading(false);
     }).catch(() => setBookingsLoading(false));
   }, [user]);
@@ -148,7 +140,7 @@ export default function BookingsPage() {
   const markBooking = async (id: string, newStatus: "Completed" | "No-Show") => {
     const booking = bookings.find(b => b.id === id);
     const dbStatus = newStatus === "No-Show" ? "no-show" : newStatus.toLowerCase();
-    await insforge.database.from("bookings").update({ status: dbStatus }).eq("id", id);
+    await apiFetch(`/bookings/${id}`, { method: "PATCH", body: JSON.stringify({ status: dbStatus }) });
     setBookings(bookings.map(b => b.id === id ? { ...b, status: newStatus } : b));
     toast({
       title: newStatus === "Completed" ? "Marked as completed" : "Marked as no-show",
@@ -158,7 +150,7 @@ export default function BookingsPage() {
 
   const handleCancel = async () => {
     if (!selected) return;
-    await insforge.database.from("bookings").update({ status: "cancelled" }).eq("id", selected.id);
+    await apiFetch(`/bookings/${selected.id}`, { method: "PATCH", body: JSON.stringify({ status: "cancelled" }) });
     setBookings(bookings.map(b => b.id === selected.id ? { ...b, status: "Cancelled" } : b));
     toast({ title: "Booking cancelled", description: `${selected.client}'s booking has been cancelled.` });
     closeModal();
@@ -177,7 +169,7 @@ export default function BookingsPage() {
     }
     const formatted = new Date(rescheduleDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
     const isoDate = new Date(`${rescheduleDate}T${rescheduleTime}`).toISOString();
-    await insforge.database.from("bookings").update({ scheduled_at: isoDate, status: "confirmed" }).eq("id", selected!.id);
+    await apiFetch(`/bookings/${selected!.id}`, { method: "PATCH", body: JSON.stringify({ scheduled_at: isoDate, status: "confirmed" }) });
     setBookings(bookings.map(b =>
       b.id === selected?.id ? { ...b, date: formatted, time: rescheduleTime, status: "Confirmed" } : b
     ));
@@ -194,18 +186,21 @@ export default function BookingsPage() {
     const svc = userServices.find(s => s.name === addForm.service);
     const isoScheduled = new Date(`${addForm.date}T${addForm.time}`).toISOString();
     const rawAmount = svc?.price ?? Number((AMOUNTS[addForm.service] ?? "0").replace(/,/g, ""));
-    const { data, error } = await insforge.database.from("bookings").insert({
-      owner_id: user.id,
-      service_id: svc?.id ?? null,
-      client_name: addForm.client,
-      client_phone: addForm.phone || null,
-      scheduled_at: isoScheduled,
-      amount: rawAmount,
-      payment_status: "unpaid",
-      notes: addForm.notes || null,
-      status: "pending",
-    }).select().single();
-    if (error) { setAddError("Failed to save booking. Please try again."); return; }
+    const { data: bookingRes, error } = await apiFetch<{ data: any }>("/bookings", {
+      method: "POST",
+      body: JSON.stringify({
+        owner_id: user.id,
+        service_id: svc?.id ?? null,
+        client_name: addForm.client,
+        client_phone: addForm.phone || null,
+        scheduled_at: isoScheduled,
+        amount: rawAmount,
+        payment_status: "unpaid",
+        notes: addForm.notes || null,
+      }),
+    });
+    const data = bookingRes?.data;
+    if (error || !data) { setAddError("Failed to save booking. Please try again."); return; }
     const newBooking: Booking = {
       id: data.id,
       serviceId: svc?.id,

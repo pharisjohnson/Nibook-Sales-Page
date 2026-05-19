@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
-import { insforge } from "@/lib/insforge";
+import { apiFetch } from "@/lib/api";
 import {
   TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight,
   Download, Share2, FileText, Calendar, DollarSign,
@@ -72,12 +72,8 @@ export default function AnalyticsPage() {
     else if (range === "30 days") from.setDate(now.getDate() - 30);
     else if (range === "90 days") from.setDate(now.getDate() - 90);
     else from.setMonth(0, 1);
-    insforge.database
-      .from("bookings")
-      .select("*, services(name, price)")
-      .eq("owner_id", user.id)
-      .gte("scheduled_at", from.toISOString())
-      .then(({ data }) => { if (data) setLiveBookings(data); });
+    apiFetch<{ raw: any[] }>(`/analytics/${user.id}?from=${from.toISOString()}`)
+      .then(({ data }) => { if (data?.raw) setLiveBookings(data.raw); });
   }, [user, range]);
 
   const hasLiveData = liveBookings.length > 0;
