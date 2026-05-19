@@ -1,0 +1,15 @@
+node_modules
+**/node_modules
+**/dist
+**/.turbo
+**/*.tsbuildinfo
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+*.md
+!AGENTS.md
+.vscode
+.idea
+docker-compose.override.yml
