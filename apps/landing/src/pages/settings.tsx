@@ -19,6 +19,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { useProfile } from "@/lib/profile";
+import { uploadFile } from "@/lib/api";
+import { Loader2 } from "lucide-react";
 
 const themes = [
   { id: "classic", name: "Classic", primary: "#0066CC", bg: "#FFFFFF" },
@@ -61,6 +63,8 @@ export default function SettingsPage() {
   const [businessLocation, setBusinessLocation] = useState("");
   const [coverUrl, setCoverUrl] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [policyText, setPolicyText] = useState("Cancellations made less than 24 hours before your appointment are non-refundable. No-shows will be charged the full service fee. To reschedule, please contact us at least 4 hours in advance.");
@@ -92,14 +96,26 @@ export default function SettingsPage() {
     setHasChanges(true);
   };
 
-  const handleCoverUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) { setCoverUrl(URL.createObjectURL(file)); setHasChanges(true); }
+    if (!file) return;
+    setUploadingCover(true);
+    const { url, error } = await uploadFile(file, "profiles");
+    setUploadingCover(false);
+    if (error || !url) { toast({ title: "Upload failed", description: error ?? "Try again", variant: "destructive" }); return; }
+    setCoverUrl(url);
+    setHasChanges(true);
   };
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) { setLogoUrl(URL.createObjectURL(file)); setHasChanges(true); }
+    if (!file) return;
+    setUploadingLogo(true);
+    const { url, error } = await uploadFile(file, "profiles");
+    setUploadingLogo(false);
+    if (error || !url) { toast({ title: "Upload failed", description: error ?? "Try again", variant: "destructive" }); return; }
+    setLogoUrl(url);
+    setHasChanges(true);
   };
 
   const getInitials = (name: string) =>
@@ -183,10 +199,11 @@ export default function SettingsPage() {
                         size="sm"
                         variant="secondary"
                         className="gap-1.5 shadow"
+                        disabled={uploadingCover}
                         onClick={() => coverInputRef.current?.click()}
                       >
-                        <ImagePlus className="w-3.5 h-3.5" />
-                        {coverUrl ? "Change" : "Upload"}
+                        {uploadingCover ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImagePlus className="w-3.5 h-3.5" />}
+                        {uploadingCover ? "Uploading…" : coverUrl ? "Change" : "Upload"}
                       </Button>
                       {coverUrl && (
                         <Button
@@ -225,9 +242,9 @@ export default function SettingsPage() {
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Button variant="outline" size="sm" className="gap-1.5" onClick={() => logoInputRef.current?.click()}>
-                        <ImagePlus className="w-3.5 h-3.5" />
-                        {logoUrl ? "Change logo" : "Upload logo"}
+                      <Button variant="outline" size="sm" className="gap-1.5" disabled={uploadingLogo} onClick={() => logoInputRef.current?.click()}>
+                        {uploadingLogo ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImagePlus className="w-3.5 h-3.5" />}
+                        {uploadingLogo ? "Uploading…" : logoUrl ? "Change logo" : "Upload logo"}
                       </Button>
                       {logoUrl && (
                         <Button variant="ghost" size="sm" className="gap-1.5 text-destructive hover:text-destructive block"

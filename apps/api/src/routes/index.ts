@@ -9,6 +9,7 @@ import teamRouter from "./team";
 import profileRouter from "./profile";
 import servicesRouter from "./services";
 import waitlistRouter from "./waitlist";
+import uploadRouter from "./upload";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(teamRouter);
 router.use(profileRouter);
 router.use(servicesRouter);
 router.use(waitlistRouter);
+router.use(uploadRouter);
 
 export default router;

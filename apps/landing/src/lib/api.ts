@@ -20,6 +20,31 @@ export function clearSession() {
   localStorage.removeItem(USER_KEY);
 }
 
+export async function uploadFile(
+  file: File,
+  folder: "profiles" | "services" | "team",
+): Promise<{ url: string | null; error: string | null }> {
+  const token = localStorage.getItem(TOKEN_KEY);
+  try {
+    const res = await fetch(`/api/upload?folder=${folder}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": file.type,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: file,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      return { url: null, error: body.error ?? `HTTP ${res.status}` };
+    }
+    const body = await res.json();
+    return { url: body.url as string, error: null };
+  } catch (err) {
+    return { url: null, error: String(err) };
+  }
+}
+
 export async function apiFetch<T = any>(
   path: string,
   options: RequestInit = {},

@@ -23,7 +23,8 @@ import {
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, uploadFile } from "@/lib/api";
+import { Loader2 } from "lucide-react";
 
 const MAX_IMAGES = 2;
 
@@ -144,29 +145,31 @@ function ImageUploadArea({
   images: string[];
   onChange: (imgs: string[]) => void;
 }) {
+  const { toast } = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
-
-  const readFile = (file: File): Promise<string> =>
-    new Promise((resolve, reject) => {
-      if (!file.type.startsWith("image/")) { reject("Not an image"); return; }
-      const reader = new FileReader();
-      reader.onload = e => resolve(e.target?.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
+  const [uploading, setUploading] = useState(false);
 
   const addFiles = useCallback(
     async (files: FileList | null) => {
       if (!files) return;
       const remaining = MAX_IMAGES - images.length;
       if (remaining <= 0) return;
-      const toProcess = Array.from(files).slice(0, remaining);
-      const results = await Promise.all(toProcess.map(readFile).map(p => p.catch(() => null)));
+      const toProcess = Array.from(files).filter(f => f.type.startsWith("image/")).slice(0, remaining);
+      if (!toProcess.length) return;
+      setUploading(true);
+      const results = await Promise.all(
+        toProcess.map(f => uploadFile(f, "services").then(r => r.url).catch(() => null))
+      );
+      setUploading(false);
       const valid = results.filter(Boolean) as string[];
-      if (valid.length) onChange([...images, ...valid]);
+      if (valid.length) {
+        onChange([...images, ...valid]);
+      } else {
+        toast({ title: "Upload failed", description: "Could not upload image. Try again.", variant: "destructive" });
+      }
     },
-    [images, onChange]
+    [images, onChange, toast]
   );
 
   const remove = (idx: number) => onChange(images.filter((_, i) => i !== idx));
@@ -203,21 +206,23 @@ function ImageUploadArea({
       {/* Drop zone */}
       {canAdd && (
         <div
-          onClick={() => inputRef.current?.click()}
-          onDragOver={e => { e.preventDefault(); setDragging(true); }}
+          onClick={() => !uploading && inputRef.current?.click()}
+          onDragOver={e => { e.preventDefault(); if (!uploading) setDragging(true); }}
           onDragLeave={() => setDragging(false)}
           onDrop={e => { e.preventDefault(); setDragging(false); addFiles(e.dataTransfer.files); }}
-          className={`flex flex-col items-center justify-center gap-2 p-5 border-2 border-dashed rounded-xl cursor-pointer transition-all ${
-            dragging
-              ? "border-primary bg-primary/5 scale-[1.01]"
-              : "border-border/70 hover:border-primary/50 hover:bg-muted/40"
+          className={`flex flex-col items-center justify-center gap-2 p-5 border-2 border-dashed rounded-xl transition-all ${
+            uploading
+              ? "border-primary/40 bg-primary/5 cursor-wait"
+              : dragging
+              ? "border-primary bg-primary/5 scale-[1.01] cursor-pointer"
+              : "border-border/70 hover:border-primary/50 hover:bg-muted/40 cursor-pointer"
           }`}
         >
           <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center">
-            <Upload className="w-4 h-4 text-primary" />
+            {uploading ? <Loader2 className="w-4 h-4 text-primary animate-spin" /> : <Upload className="w-4 h-4 text-primary" />}
           </div>
           <div className="text-center">
-            <p className="text-sm font-medium">Click or drag image here</p>
+            <p className="text-sm font-medium">{uploading ? "Uploading…" : "Click or drag image here"}</p>
             <p className="text-xs text-muted-foreground mt-0.5">
               JPG, PNG, WEBP — {MAX_IMAGES - images.length} slot{MAX_IMAGES - images.length !== 1 ? "s" : ""} remaining
             </p>
