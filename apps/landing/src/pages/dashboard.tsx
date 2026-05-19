@@ -52,10 +52,45 @@ export default function DashboardHome() {
   const [copied, setCopied] = useState(false);
   const [statModal, setStatModal] = useState<"revenue" | "bookings" | "completion" | "topservice" | null>(null);
   const [showUpgrade, setShowUpgrade] = useState(false);
+  const [upgradingPlan, setUpgradingPlan] = useState<string | null>(null);
 
   const firstName = profile?.business_name?.split(" ")[0] ?? user?.email?.split("@")[0] ?? "there";
   const bookingSlug = profile?.slug ?? "your-business";
-  const bookingPageUrl = `https://nibook.com/book/${bookingSlug}`;
+  const bookingPageUrl = `https://nibook.noonstudio.africa/book/${bookingSlug}`;
+
+  const PLANS = [
+    {
+      name: "Starter",
+      price: "KES 999",
+      interval: "/month",
+      code: import.meta.env.VITE_PAYSTACK_STARTER_PLAN_CODE ?? "",
+      features: ["Up to 100 bookings/month", "Public booking page", "WhatsApp notifications", "Basic analytics", "Services management"],
+      highlight: false,
+    },
+    {
+      name: "Pro",
+      price: "KES 2,499",
+      interval: "/month",
+      code: import.meta.env.VITE_PAYSTACK_PREMIUM_PLAN_CODE ?? "",
+      features: ["Unlimited bookings", "Custom domain", "Team members", "QR code sharing", "Advanced analytics", "Priority support"],
+      highlight: true,
+    },
+  ];
+
+  const handleUpgrade = async (planCode: string) => {
+    if (!user?.email || !planCode) return;
+    setUpgradingPlan(planCode);
+    const { data, error } = await apiFetch<{ authorization_url: string }>("/subscriptions/initialize", {
+      method: "POST",
+      body: JSON.stringify({ email: user.email, plan_code: planCode, owner_id: user.id }),
+    });
+    setUpgradingPlan(null);
+    if (error || !data?.authorization_url) {
+      toast({ title: "Error", description: error ?? "Could not start payment", variant: "destructive" });
+      return;
+    }
+    window.location.href = data.authorization_url;
+  };
   const [stats, setStats] = useState({ revenue: 0, count: 0, completionRate: 0, topService: "" });
   const [statsLoading, setStatsLoading] = useState(true);
 
@@ -541,7 +576,7 @@ export default function DashboardHome() {
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Share via</p>
               <div className="grid grid-cols-3 gap-2">
                 <button
-                  onClick={() => { window.open(`https://wa.me/?text=Book an appointment with Amina's Beauty Studio: ${bookingPageUrl}`, "_blank"); }}
+                  onClick={() => { window.open(`https://wa.me/?text=Book an appointment with ${profile?.business_name ?? "us"}: ${bookingPageUrl}`, "_blank"); }}
                   className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-border bg-muted/30 hover:bg-green-50 hover:border-green-200 transition-all group"
                 >
                   <div className="w-9 h-9 bg-green-500 rounded-full flex items-center justify-center">
@@ -727,6 +762,72 @@ export default function DashboardHome() {
            </DialogFooter>
          </DialogContent>
        </Dialog>
+
+      {/* ── Upgrade dialog ── */}
+      <Dialog open={showUpgrade} onOpenChange={open => { if (!open) setShowUpgrade(false); }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Zap className="w-5 h-5 text-yellow-500" />
+              Upgrade Nibook
+            </DialogTitle>
+            <DialogDescription>
+              Pick a plan and unlock more features for your business.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-2 gap-4 mt-1">
+            {PLANS.map(plan => (
+              <div
+                key={plan.code}
+                className={`relative rounded-2xl border p-4 flex flex-col gap-3 ${
+                  plan.highlight
+                    ? "border-primary bg-primary/5 shadow-md"
+                    : "border-border bg-muted/30"
+                }`}
+              >
+                {plan.highlight && (
+                  <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wide">
+                    Popular
+                  </span>
+                )}
+                <div>
+                  <p className="font-bold text-sm">{plan.name}</p>
+                  <p className="text-2xl font-extrabold mt-0.5">
+                    {plan.price}
+                    <span className="text-xs font-normal text-muted-foreground">{plan.interval}</span>
+                  </p>
+                </div>
+                <ul className="space-y-1.5 flex-1">
+                  {plan.features.map(f => (
+                    <li key={f} className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                      <Check className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+                <Button
+                  size="sm"
+                  variant={plan.highlight ? "default" : "outline"}
+                  className="w-full mt-1"
+                  disabled={!!upgradingPlan}
+                  onClick={() => handleUpgrade(plan.code)}
+                >
+                  {upgradingPlan === plan.code ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    "Subscribe"
+                  )}
+                </Button>
+              </div>
+            ))}
+          </div>
+
+          <p className="text-center text-xs text-muted-foreground pt-1">
+            Billed monthly · Cancel anytime · Secure payment via Paystack
+          </p>
+        </DialogContent>
+      </Dialog>
 
     </>
   );
