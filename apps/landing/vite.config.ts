@@ -19,6 +19,7 @@ export default defineConfig({
       silent: true,
     }),
   ],
+  envDir: "../..",
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "src"),

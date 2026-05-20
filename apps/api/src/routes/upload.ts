@@ -1,4 +1,4 @@
-import { Router, type IRouter, type Request, type Response } from "express";
+import express, { Router, type IRouter, type Request, type Response } from "express";
 import { getInsforgeAdmin } from "../lib/insforge.js";
 
 const router: IRouter = Router();
@@ -19,10 +19,7 @@ const ALLOWED_TYPES: Record<string, string> = {
 // Returns: { url: string }
 router.post(
   "/upload",
-  (req: Request, res: Response, next) => {
-    // Parse as raw buffer before route handler
-    express_raw(req, res, next);
-  },
+  express.raw({ type: Object.keys(ALLOWED_TYPES), limit: "10mb" }),
   async (req: Request, res: Response) => {
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith("Bearer ")) {
@@ -43,9 +40,10 @@ router.post(
 
     const body = req.body as Buffer;
     if (!body || body.length === 0) {
-      res.status(400).json({ error: "Empty file body" });
+      res.status(400).json({ error: "Empty or invalid file body. Ensure Content-Type is set to one of: " + Object.keys(ALLOWED_TYPES).join(", ") });
       return;
     }
+
     if (body.length > 10 * 1024 * 1024) {
       res.status(413).json({ error: "File too large (max 10 MB)" });
       return;
@@ -61,6 +59,7 @@ router.post(
         return;
       }
 
+      // data.key is the path in the bucket
       const url = insforge.storage.from(BUCKET).getPublicUrl(data.key);
       res.json({ url });
     } catch (err) {
@@ -68,16 +67,5 @@ router.post(
     }
   },
 );
-
-// Inline raw-body parser (avoids adding multer as a dep)
-function express_raw(req: Request, res: Response, next: () => void) {
-  const chunks: Buffer[] = [];
-  req.on("data", (chunk: Buffer) => chunks.push(chunk));
-  req.on("end", () => {
-    (req as any).body = Buffer.concat(chunks);
-    next();
-  });
-  req.on("error", () => res.status(400).json({ error: "Stream error" }));
-}
 
 export default router;
