@@ -291,10 +291,10 @@ export default function SettingsPage() {
                 <div className="space-y-2">
                   <Label>Your booking link</Label>
                   <div className="flex items-center gap-2 p-3 bg-muted rounded-lg border text-sm">
-                    <span className="text-muted-foreground">nibook.com/book/</span>
+                    <span className="text-muted-foreground">nibook.noonstudio.africa/</span>
                     <span className="font-semibold text-primary">{profile?.slug || "your-business"}</span>
                     <Button variant="ghost" size="icon" className="ml-auto h-7 w-7" onClick={() => {
-                      if (profile?.slug) window.open(`/book/${profile.slug}`, "_blank");
+                      if (profile?.slug) window.open(`/${profile.slug}`, "_blank");
                     }}>
                       <ExternalLink className="w-3.5 h-3.5" />
                     </Button>

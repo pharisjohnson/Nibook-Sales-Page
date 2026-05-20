@@ -4,12 +4,14 @@ import { Calendar, Menu, X, Map, LogOut, LayoutDashboard } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { AuthModal } from "./AuthModal";
 
-export function Navbar() {
+export function Navbar({ variant = "default" }: { variant?: "default" | "light" }) {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [authModal, setAuthModal] = useState<{ open: boolean; tab: "signin" | "signup" }>({ open: false, tab: "signin" });
   const [, navigate] = useLocation();
   const { user, signOut, loading } = useAuth();
+
+  const isLight = variant === "light" && !scrolled;
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -21,7 +23,7 @@ export function Navbar() {
     { name: "Features", href: "#features" },
     { name: "How It Works", href: "#how-it-works" },
     { name: "Pricing", href: "#pricing" },
-    { name: "Testimonials", href: "#testimonials" },
+    { name: "Reviews", href: "/reviews" },
     { name: "Directory", href: "/directory" },
   ];
 
@@ -46,7 +48,11 @@ export function Navbar() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
           {/* Logo */}
           <Link href="/" className="flex items-center group">
-            <img src="/nibook-wordmark.png" alt="Nibook" className="h-16 w-auto group-hover:opacity-90 transition-opacity" />
+            <img
+              src="/nibook-wordmark.png"
+              alt="Nibook"
+              className={`h-16 w-auto group-hover:opacity-90 transition-opacity ${isLight ? "brightness-0 invert" : ""}`}
+            />
           </Link>
 
           {/* Desktop Nav */}
@@ -54,13 +60,13 @@ export function Navbar() {
             {navLinks.map((link) =>
               link.href.startsWith("/") ? (
                 <Link key={link.name} href={link.href}>
-                  <span className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors flex items-center gap-1.5 cursor-pointer">
+                  <span className={`text-sm font-medium transition-colors flex items-center gap-1.5 cursor-pointer ${isLight ? "text-white/80 hover:text-white" : "text-muted-foreground hover:text-primary"}`}>
                     {link.name === "Directory" && <Map className="w-3.5 h-3.5" />}
                     {link.name}
                   </span>
                 </Link>
               ) : (
-                <a key={link.name} href={link.href} className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">
+                <a key={link.name} href={link.href} className={`text-sm font-medium transition-colors ${isLight ? "text-white/80 hover:text-white" : "text-muted-foreground hover:text-primary"}`}>
                   {link.name}
                 </a>
               )
@@ -73,14 +79,14 @@ export function Navbar() {
               <>
                 <button
                   onClick={() => navigate("/dashboard")}
-                  className="text-sm font-medium text-foreground hover:text-primary transition-colors px-3 py-2 flex items-center gap-1.5"
+                  className={`text-sm font-medium transition-colors px-3 py-2 flex items-center gap-1.5 ${isLight ? "text-white hover:text-white/80" : "text-foreground hover:text-primary"}`}
                 >
                   <LayoutDashboard className="w-4 h-4" />
                   Dashboard
                 </button>
                 <button
                   onClick={handleSignOut}
-                  className="text-sm font-medium text-muted-foreground hover:text-foreground px-3 py-2 flex items-center gap-1.5"
+                  className={`text-sm font-medium px-3 py-2 flex items-center gap-1.5 transition-colors ${isLight ? "text-white/70 hover:text-white" : "text-muted-foreground hover:text-foreground"}`}
                 >
                   <LogOut className="w-4 h-4" />
                   Sign Out
@@ -90,13 +96,13 @@ export function Navbar() {
               <>
                 <button
                   onClick={() => openAuth("signin")}
-                  className="text-sm font-medium text-foreground hover:text-primary transition-colors px-3 py-2"
+                  className={`text-sm font-medium transition-colors px-3 py-2 ${isLight ? "text-white hover:text-white/80" : "text-foreground hover:text-primary"}`}
                 >
                   Sign In
                 </button>
                 <button
                   onClick={() => openAuth("signup")}
-                  className="text-sm font-semibold bg-primary text-white px-5 py-2.5 rounded-full shadow-lg shadow-primary/25 hover:shadow-xl hover:-translate-y-0.5 hover:bg-primary/90 transition-all active:translate-y-0"
+                  className={`text-sm font-semibold px-5 py-2.5 rounded-full shadow-lg transition-all hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 ${isLight ? "bg-white text-primary hover:bg-white/90 shadow-black/20" : "bg-primary text-white shadow-primary/25 hover:bg-primary/90"}`}
                 >
                   Get Started Free
                 </button>
@@ -106,7 +112,7 @@ export function Navbar() {
 
           {/* Mobile Toggle */}
           <button
-            className="md:hidden p-2 text-foreground"
+            className={`md:hidden p-2 ${isLight ? "text-white" : "text-foreground"}`}
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           >
             {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}

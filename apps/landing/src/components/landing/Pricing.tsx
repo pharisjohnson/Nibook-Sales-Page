@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, Zap, Users, Building2, Gift, Mail, Loader2, ArrowRight } from "lucide-react";
+import { Check, Zap, Users, Gift, Mail, Loader2, ArrowRight } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
@@ -70,36 +70,6 @@ const plans = [
       "Priority support",
       "Embeddable widget",
       "Cancellation policy & intake forms",
-    ],
-  },
-  {
-    name: "Enterprise",
-    tagline: "For agencies & franchises",
-    icon: Building2,
-    badge: "White-label",
-    badgeColor: "bg-purple-100 text-purple-700 border-purple-200",
-    price: "Custom",
-    amount: 0,
-    priceSuffix: "",
-    subtext: "Tailored pricing for your scale",
-    seats: "Unlimited users",
-    cta: "Contact Sales",
-    isTrial: false,
-    planCode: undefined,
-    ctaStyle: "border-2 border-border hover:border-primary hover:bg-primary/5 text-foreground",
-    cardStyle: "bg-white border border-border",
-    dark: false,
-    features: [
-      "Unlimited staff seats",
-      "White-label branding (your logo, domain)",
-      "Custom iOS & Android client app",
-      "Multi-location management",
-      "API access & webhooks",
-      "Dedicated account manager",
-      "SLA-backed uptime guarantee",
-      "Custom integrations",
-      "Directory listing (sponsored)",
-      "Revenue & commission splits",
     ],
   },
 ];
@@ -205,13 +175,13 @@ export function Pricing() {
           className="text-center max-w-3xl mx-auto mb-16"
         >
           <span className="inline-block text-xs font-semibold uppercase tracking-widest text-primary bg-primary/10 px-4 py-1.5 rounded-full mb-4">Pricing</span>
-          <h2 className="text-3xl md:text-4xl font-bold text-foreground">Grow at your own pace</h2>
+          <h2 className="text-3xl md:text-4xl font-bold text-foreground">Simple, honest pricing</h2>
           <p className="mt-4 text-lg text-muted-foreground">
-            Start with a free 7-day trial on Starter. No credit card required.
+            Start free for 7 days — no credit card, no commitment. Upgrade when you're ready.
           </p>
         </motion.div>
 
-        <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto items-stretch">
+        <div className="grid md:grid-cols-2 gap-6 max-w-3xl mx-auto items-stretch">
           {plans.map((plan, idx) => {
             const Icon = plan.icon;
             return (

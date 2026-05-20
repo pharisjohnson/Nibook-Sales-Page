@@ -48,7 +48,7 @@ function bizGradient(id: string) {
 function ListCard({ biz }: { biz: DirectoryBusiness }) {
   const gradient = bizGradient(biz.id);
   return (
-    <Link href={`/book/${biz.slug}`}>
+    <Link href={`/${biz.slug}`}>
       <motion.div layout className="bg-white border border-border rounded-2xl overflow-hidden hover:shadow-md hover:border-primary/20 transition-all group cursor-pointer">
         <div className="flex gap-4 p-4">
           <div className={`w-16 h-16 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center shrink-0 shadow-sm overflow-hidden`}>
@@ -82,7 +82,7 @@ function ListCard({ biz }: { biz: DirectoryBusiness }) {
 function GridCard({ biz }: { biz: DirectoryBusiness }) {
   const gradient = bizGradient(biz.id);
   return (
-    <Link href={`/book/${biz.slug}`}>
+    <Link href={`/${biz.slug}`}>
       <motion.div layout className="bg-white border border-border rounded-2xl overflow-hidden hover:shadow-lg hover:border-primary/20 hover:-translate-y-0.5 transition-all group cursor-pointer flex flex-col">
         <div className={`relative h-36 bg-gradient-to-br ${gradient} flex items-center justify-center`}>
           {biz.cover_url

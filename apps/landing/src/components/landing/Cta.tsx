@@ -41,10 +41,10 @@ export function FinalCta() {
           className="bg-primary text-white rounded-3xl p-10 md:p-16 shadow-2xl shadow-primary/20 border border-primary/20"
         >
           <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-6">
-            Ready to grow your service business?
+            Be among the first to use Nibook
           </h2>
           <p className="text-lg md:text-xl text-primary-foreground/80 mb-10 max-w-2xl mx-auto">
-            Join 500+ service professionals already using Nibook to book more clients, reduce no-shows, and earn more money.
+            We're looking for service professionals to try Nibook early, shape the product, and grow with us from day one.
           </p>
           
           <div className="flex flex-col items-center gap-6">

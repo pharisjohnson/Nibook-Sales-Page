@@ -56,7 +56,7 @@ export default function DashboardHome() {
 
   const firstName = profile?.business_name?.split(" ")[0] ?? user?.email?.split("@")[0] ?? "there";
   const bookingSlug = profile?.slug ?? "your-business";
-  const bookingPageUrl = `https://nibook.noonstudio.africa/book/${bookingSlug}`;
+  const bookingPageUrl = `https://nibook.noonstudio.africa/${bookingSlug}`;
 
   const PLANS = [
     {

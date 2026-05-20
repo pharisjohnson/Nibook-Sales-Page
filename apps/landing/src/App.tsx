@@ -10,6 +10,14 @@ import DirectoryPage from "@/pages/directory";
 import BookingStorePage from "@/pages/booking-store";
 import WaitlistPage from "@/pages/waitlist";
 import OnboardingPage from "@/pages/onboarding";
+import FeedbackPage from "@/pages/feedback";
+import ReferralPage from "@/pages/referral";
+import PrivacyPage from "@/pages/privacy";
+import TermsPage from "@/pages/terms";
+import HelpPage from "@/pages/help";
+import ContactPage from "@/pages/contact";
+import ReviewsPage from "@/pages/reviews";
+import FeatureRequestsPage from "@/pages/feature-requests";
 
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -64,9 +72,16 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/directory" component={DirectoryPage} />
-      <Route path="/book/:slug" component={BookingStorePage} />
       <Route path="/waitlist" component={WaitlistPage} />
       <Route path="/subscription/callback" component={SubscriptionCallbackPage} />
+      <Route path="/feedback" component={FeedbackPage} />
+      <Route path="/referral" component={ReferralPage} />
+      <Route path="/privacy" component={PrivacyPage} />
+      <Route path="/terms" component={TermsPage} />
+      <Route path="/help" component={HelpPage} />
+      <Route path="/contact" component={ContactPage} />
+      <Route path="/reviews" component={ReviewsPage} />
+      <Route path="/feature-requests" component={FeatureRequestsPage} />
       <Route path="/onboarding">
         <ProtectedOnboarding><OnboardingPage /></ProtectedOnboarding>
       </Route>
@@ -93,6 +108,7 @@ function Router() {
         <ProtectedDashboard><AnalyticsPage /></ProtectedDashboard>
       </Route>
 
+      <Route path="/:slug" component={BookingStorePage} />
       <Route component={NotFound} />
     </Switch>
   );
