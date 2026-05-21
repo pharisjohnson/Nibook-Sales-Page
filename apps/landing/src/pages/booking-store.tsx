@@ -7,11 +7,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { useSeo } from "@/hooks/use-seo";
 import { apiFetch } from "@/lib/api";
 import {
   MapPin, Clock, Phone, MessageSquare, ChevronRight,
   Calendar, Scissors, Check, ArrowLeft, Share2, Heart, Loader2,
-  Smartphone, AlertCircle, CalendarOff,
+  Smartphone, CalendarOff,
 } from "lucide-react";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -158,6 +159,20 @@ export default function BookingStorePage() {
   const [pageLoading, setPageLoading] = useState(true);
   const [liked, setLiked] = useState(false);
 
+  useSeo({
+    title: business
+      ? `Book ${business.business_name}${business.category ? ` · ${business.category}` : ""}${business.location ? ` in ${business.location}` : ""}`
+      : "Book an Appointment",
+    description: business?.bio
+      ? business.bio.slice(0, 155)
+      : business
+      ? `Book an appointment with ${business.business_name} on Nibook. Easy online booking, no app download needed.`
+      : "Book appointments with the best service businesses in Kenya.",
+    image: business?.logo_url ?? business?.cover_url ?? undefined,
+    url: business ? `/${business.slug}` : undefined,
+    type: "profile",
+  });
+
   // Booking dialog state
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [step, setStep] = useState<"pick-time" | "details" | "payment" | "confirm">("pick-time");
@@ -172,8 +187,6 @@ export default function BookingStorePage() {
   // Client info
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
-  const [payPhone, setPayPhone] = useState("");
-  const [paymentState, setPaymentState] = useState<"idle" | "pending" | "polling" | "paid" | "failed">("idle");
   const [bookingId, setBookingId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -242,8 +255,6 @@ export default function BookingStorePage() {
     setSelectedTime("");
     setClientName("");
     setClientPhone("");
-    setPayPhone("");
-    setPaymentState("idle");
     setBookingId(null);
   };
 
@@ -271,42 +282,12 @@ export default function BookingStorePage() {
       return;
     }
     setBookingId(data.data.id);
-    setPayPhone(clientPhone.trim());
     setStep("payment");
   };
 
-  // ── Step: payment → M-Pesa STK push ────────────────────────────────────────
-  const handlePay = async () => {
-    if (!payPhone.trim() || !bookingId || !selectedService || !business) return;
-    setPaymentState("pending");
-    const { data, error } = await apiFetch<{ success: boolean; reference: string }>("/jenga/collect", {
-      method: "POST",
-      body: JSON.stringify({
-        booking_id: bookingId,
-        phone: payPhone.trim(),
-        amount: selectedService.price,
-        business_name: business.business_name,
-      }),
-    });
-    if (error || !data?.success) {
-      setPaymentState("failed");
-      toast({ title: "Payment failed", description: error ?? "Could not initiate M-Pesa prompt", variant: "destructive" });
-      return;
-    }
-    const ref = data.reference;
-    setPaymentState("polling");
-    let attempts = 0;
-    const poll = setInterval(async () => {
-      attempts++;
-      if (attempts > 30) { clearInterval(poll); setPaymentState("failed"); return; }
-      const { data: statusData } = await apiFetch<{ status: string }>(`/jenga/collect/status/${ref}`);
-      if (statusData?.status === "paid") {
-        clearInterval(poll); setPaymentState("paid"); setStep("confirm");
-      } else if (statusData?.status === "failed") {
-        clearInterval(poll); setPaymentState("failed");
-        toast({ title: "Payment not confirmed", description: "The prompt was declined or timed out.", variant: "destructive" });
-      }
-    }, 4000);
+  // ── Step: payment → confirm (placeholder — Jenga integration coming soon) ───
+  const handlePay = () => {
+    setStep("confirm");
   };
 
   const handleDone = () => {
@@ -585,7 +566,7 @@ export default function BookingStorePage() {
             </div>
           )}
 
-          {/* ── Payment ── */}
+          {/* ── Payment (placeholder) ── */}
           {step === "payment" && (
             <div className="space-y-4">
               <div className="p-4 bg-muted/40 rounded-xl space-y-1">
@@ -599,58 +580,18 @@ export default function BookingStorePage() {
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <Label className="flex items-center gap-1.5">
-                  <Smartphone className="w-3.5 h-3.5 text-green-600" />
-                  M-Pesa number
-                </Label>
-                <Input
-                  placeholder="+254 7xx xxx xxx"
-                  value={payPhone}
-                  onChange={e => setPayPhone(e.target.value)}
-                  disabled={paymentState === "polling" || paymentState === "pending"}
-                />
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800 flex items-start gap-3">
+                <Smartphone className="w-4 h-4 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold">Pay at venue</p>
+                  <p className="text-amber-700 text-xs mt-0.5">Online payment coming soon. The business will collect payment at your appointment.</p>
+                </div>
               </div>
-
-              {(paymentState === "pending" || paymentState === "polling") && (
-                <div className="p-4 bg-green-50 border border-green-200 rounded-xl text-sm text-green-800 flex items-start gap-3">
-                  <Loader2 className="w-4 h-4 animate-spin shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-semibold">Check your phone</p>
-                    <p className="text-green-700 text-xs mt-0.5">An M-Pesa prompt has been sent to {payPhone}. Enter your PIN to confirm.</p>
-                  </div>
-                </div>
-              )}
-
-              {paymentState === "failed" && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                  Payment not confirmed. Check your number and try again.
-                </div>
-              )}
 
               <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => setStep("details")}
-                  disabled={paymentState === "polling" || paymentState === "pending"}
-                >
-                  Back
-                </Button>
-                <Button
-                  className="flex-1 bg-green-600 hover:bg-green-700"
-                  disabled={!payPhone.trim() || paymentState === "polling" || paymentState === "pending"}
-                  onClick={handlePay}
-                >
-                  {paymentState === "polling" || paymentState === "pending"
-                    ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Waiting…</>
-                    : <>Pay KES {selectedService?.price.toLocaleString()}</>
-                  }
-                </Button>
+                <Button variant="outline" className="flex-1" onClick={() => setStep("details")}>Back</Button>
+                <Button className="flex-1" onClick={handlePay}>Confirm Booking</Button>
               </div>
-
-              <p className="text-xs text-center text-muted-foreground">Powered by Jenga · Secured by M-Pesa</p>
             </div>
           )}
         </DialogContent>

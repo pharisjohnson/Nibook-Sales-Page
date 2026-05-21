@@ -1,0 +1,20 @@
+User-agent: *
+Allow: /
+Allow: /directory
+Allow: /help
+Allow: /privacy
+Allow: /terms
+Allow: /contact
+
+# Keep dashboard and auth routes private
+Disallow: /dashboard
+Disallow: /services
+Disallow: /bookings
+Disallow: /availability
+Disallow: /team
+Disallow: /settings
+Disallow: /analytics
+Disallow: /onboarding
+Disallow: /subscription/
+
+Sitemap: https://nibook.noonstudio.africa/sitemap.xml

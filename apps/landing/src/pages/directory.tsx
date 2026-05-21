@@ -1,3 +1,4 @@
+import { useSeo } from "@/hooks/use-seo";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useMemo, useEffect } from "react";
 import { Link } from "wouter";
@@ -111,6 +112,11 @@ function GridCard({ biz }: { biz: DirectoryBusiness }) {
 const sortOptions = ["A–Z", "Z–A"];
 
 export default function DirectoryPage() {
+  useSeo({
+    title: "Browse Service Businesses in Kenya",
+    description: "Discover and book appointments with salons, spas, barbershops and service businesses near you. Find the best local professionals on Nibook.",
+    url: "/directory",
+  });
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState("all");
   const [sortBy, setSortBy] = useState("A–Z");

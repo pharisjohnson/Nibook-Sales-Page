@@ -55,6 +55,9 @@ export default function DashboardHome() {
   const [upgradingPlan, setUpgradingPlan] = useState<string | null>(null);
 
   const firstName = profile?.business_name?.split(" ")[0] ?? user?.email?.split("@")[0] ?? "there";
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const greetingEmoji = hour < 12 ? "☀️" : hour < 17 ? "👋" : "🌙";
   const bookingSlug = profile?.slug ?? "your-business";
   const bookingPageUrl = `https://nibook.noonstudio.africa/${bookingSlug}`;
 
@@ -179,7 +182,7 @@ export default function DashboardHome() {
         {/* Header */}
         <motion.div variants={item} className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground">Good morning, {firstName}! ☀️</h1>
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">{greeting}, {firstName}! {greetingEmoji}</h1>
             <p className="text-muted-foreground mt-1 flex items-center gap-2 text-sm">
               <Clock className="w-4 h-4" />
               {activeBookings.length > 0
