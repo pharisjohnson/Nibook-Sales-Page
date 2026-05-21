@@ -15,6 +15,7 @@ import {
   Palette, MessageSquare, Link2, CreditCard, HelpCircle, Save,
   Check, Phone, Building2, Smartphone, Wallet, ExternalLink,
   Code2, FileText, Copy, Eye, EyeOff, Camera, ImagePlus, Trash2,
+  Share2, QrCode, Instagram, Facebook, Globe, Clock,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
@@ -38,11 +39,7 @@ const paymentMethods = [
   { id: "paypal", name: "PayPal", icon: CreditCard, description: "Accept international payments", enabled: false },
 ];
 
-const connections = [
-  { id: "gcal", name: "Google Calendar", description: "Sync bookings automatically", connected: false },
-  { id: "slack", name: "Slack", description: "Get booking notifications in Slack", connected: false },
-  { id: "zapier", name: "Zapier", description: "Connect with 5,000+ apps", connected: false },
-];
+const BASE_URL = "https://nibook.noonstudio.africa";
 
 export default function SettingsPage() {
   const { toast } = useToast();
@@ -70,6 +67,9 @@ export default function SettingsPage() {
   const [policyText, setPolicyText] = useState("Cancellations made less than 24 hours before your appointment are non-refundable. No-shows will be charged the full service fee. To reschedule, please contact us at least 4 hours in advance.");
   const [showPolicy, setShowPolicy] = useState(true);
   const [widgetTheme, setWidgetTheme] = useState<"light" | "dark">("light");
+  const [embedType, setEmbedType] = useState<"iframe" | "button">("iframe");
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [showQr, setShowQr] = useState(false);
 
   useEffect(() => {
     if (profile) {
@@ -120,6 +120,13 @@ export default function SettingsPage() {
 
   const getInitials = (name: string) =>
     name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase() || "B";
+
+  function copyText(text: string, key: string) {
+    navigator.clipboard.writeText(text);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2000);
+    toast({ title: "Copied to clipboard" });
+  }
 
   const handleSave = async () => {
     setSaving(true);
@@ -551,110 +558,321 @@ export default function SettingsPage() {
         {/* ── Embeddable Widget ── */}
         <TabsContent value="widget">
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-            <Card className="shadow-sm">
-              <CardHeader>
-                <CardTitle>Booking Widget</CardTitle>
-                <CardDescription>Embed your booking page on any website by pasting a script tag into your HTML.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-5">
-                <div className="flex items-center gap-3 p-3 bg-primary/5 border border-primary/20 rounded-xl text-sm text-primary">
-                  <Code2 className="w-4 h-4 shrink-0" />
-                  <span>Copy the snippet below and paste it anywhere in your website's <strong>&lt;body&gt;</strong> tag.</span>
-                </div>
+            {!profile?.slug ? (
+              <Card className="shadow-sm">
+                <CardContent className="p-8 text-center space-y-3">
+                  <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto">
+                    <Code2 className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <p className="font-semibold">Set up your business profile first</p>
+                  <p className="text-sm text-muted-foreground">Add your business name in the Business tab to generate your embed code.</p>
+                </CardContent>
+              </Card>
+            ) : (() => {
+              const bookingUrl = `${BASE_URL}/${profile.slug}`;
+              const selectedThemeData = themes.find(t => t.id === selectedTheme) ?? themes[0];
+              const iframeSnippet = `<!-- Nibook Booking Widget -->
+<iframe
+  src="${bookingUrl}"
+  width="100%"
+  height="720"
+  frameborder="0"
+  style="border-radius:12px; border:1px solid #e5e7eb; display:block;"
+  title="Book an appointment with ${profile.business_name ?? "us"}"
+  loading="lazy"
+></iframe>`;
+              const buttonSnippet = `<!-- Nibook Booking Button -->
+<a
+  href="${bookingUrl}"
+  target="_blank"
+  rel="noopener"
+  style="display:inline-block; background:${selectedThemeData.primary}; color:#fff; padding:13px 28px; border-radius:8px; text-decoration:none; font-family:sans-serif; font-weight:600; font-size:15px;"
+>
+  Book an Appointment
+</a>`;
+              const snippet = embedType === "iframe" ? iframeSnippet : buttonSnippet;
 
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label>Theme</Label>
-                    <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
-                      {(["light", "dark"] as const).map(t => (
+              return (
+                <Card className="shadow-sm">
+                  <CardHeader>
+                    <CardTitle>Booking Widget</CardTitle>
+                    <CardDescription>Embed your live booking page on any website — it works immediately, no extra setup needed.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-5">
+
+                    {/* Booking URL bar */}
+                    <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-xl border text-sm">
+                      <Globe className="w-4 h-4 text-primary shrink-0" />
+                      <span className="flex-1 font-mono text-xs truncate text-muted-foreground">{bookingUrl}</span>
+                      <button
+                        onClick={() => copyText(bookingUrl, "url")}
+                        className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors shrink-0"
+                      >
+                        {copiedKey === "url" ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                        {copiedKey === "url" ? "Copied" : "Copy"}
+                      </button>
+                      <button
+                        onClick={() => window.open(bookingUrl, "_blank")}
+                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        Preview
+                      </button>
+                    </div>
+
+                    {/* Embed type selector */}
+                    <div className="flex items-center justify-between">
+                      <Label>Embed type</Label>
+                      <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
+                        {(["iframe", "button"] as const).map(t => (
+                          <button
+                            key={t}
+                            onClick={() => setEmbedType(t)}
+                            className={`px-3 py-1 rounded-md text-xs font-medium transition-all capitalize ${embedType === t ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                          >
+                            {t === "iframe" ? "Embedded page" : "Button / link"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {embedType === "button" && (
+                      <div className="flex items-center justify-between">
+                        <Label>Button colour (from your theme)</Label>
+                        <div className="flex items-center gap-2">
+                          <div className="w-5 h-5 rounded-full border border-border" style={{ background: selectedThemeData.primary }} />
+                          <span className="text-xs font-mono text-muted-foreground">{selectedThemeData.primary}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Snippet */}
+                    <div className="space-y-2">
+                      <Label>
+                        {embedType === "iframe" ? "Paste inside your page's <body>" : "Paste anywhere on your page"}
+                      </Label>
+                      <div className="relative">
+                        <pre className="bg-slate-900 text-green-400 rounded-xl p-4 pr-20 text-xs overflow-x-auto leading-relaxed font-mono whitespace-pre-wrap break-all">
+                          {snippet}
+                        </pre>
                         <button
-                          key={t}
-                          onClick={() => { setWidgetTheme(t); setHasChanges(true); }}
-                          className={`px-3 py-1 rounded-md text-xs font-medium transition-all capitalize ${widgetTheme === t ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                          onClick={() => copyText(snippet, "snippet")}
+                          className="absolute top-2.5 right-2.5 flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white text-xs px-2.5 py-1.5 rounded-lg transition-colors"
                         >
-                          {t}
+                          {copiedKey === "snippet" ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                          {copiedKey === "snippet" ? "Copied!" : "Copy"}
                         </button>
-                      ))}
+                      </div>
                     </div>
-                  </div>
-                </div>
 
-                <div className="space-y-2">
-                  <Label>Embed snippet</Label>
-                  <div className="relative group">
-                    <pre className="bg-slate-900 text-green-400 rounded-xl p-4 text-xs overflow-x-auto leading-relaxed font-mono">
-{`<!-- Nibook Booking Widget -->
-<script
-  src="https://nibook.com/widget.js"
-  data-business="aminas-beauty-studio"
-  data-theme="${widgetTheme}"
-  data-primary="#0066CC"
-  async
-></script>
-<div id="nibook-widget"></div>`}
-                    </pre>
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(`<!-- Nibook Booking Widget -->\n<script\n  src="https://nibook.com/widget.js"\n  data-business="aminas-beauty-studio"\n  data-theme="${widgetTheme}"\n  data-primary="#0066CC"\n  async\n></script>\n<div id="nibook-widget"></div>`);
-                        toast({ title: "Copied!", description: "Widget code copied to clipboard." });
-                      }}
-                      className="absolute top-2.5 right-2.5 flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white text-xs px-2.5 py-1.5 rounded-lg transition-colors"
-                    >
-                      <Copy className="w-3 h-3" />Copy
-                    </button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
-                  {[
-                    { label: "Business slug", value: "aminas-beauty-studio" },
-                    { label: "Widget version", value: "v2.1.0" },
-                    { label: "Status", value: "Active" },
-                  ].map(item => (
-                    <div key={item.label} className="p-3 bg-muted/40 rounded-lg">
-                      <p className="text-xs text-muted-foreground mb-1">{item.label}</p>
-                      <p className="font-medium text-sm">{item.value}</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="p-3 bg-muted/40 rounded-lg">
+                        <p className="text-xs text-muted-foreground mb-1">Business slug</p>
+                        <p className="font-medium text-sm font-mono">{profile.slug}</p>
+                      </div>
+                      <div className="p-3 bg-muted/40 rounded-lg">
+                        <p className="text-xs text-muted-foreground mb-1">Embed type</p>
+                        <p className="font-medium text-sm capitalize">{embedType === "iframe" ? "Full page" : "Button"}</p>
+                      </div>
+                      <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                        <p className="text-xs text-green-700 mb-1">Status</p>
+                        <p className="font-semibold text-sm text-green-800 flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 bg-green-500 rounded-full inline-block" />
+                          Live
+                        </p>
+                      </div>
                     </div>
-                  ))}
-                </div>
 
-                <Separator />
-                <div className="flex items-start gap-3 text-sm text-muted-foreground">
-                  <Code2 className="w-4 h-4 shrink-0 mt-0.5" />
-                  <p>The widget is fully responsive and inherits your booking page theme. Advanced customization (position, z-index, trigger button) is available on Pro.</p>
-                </div>
-              </CardContent>
-            </Card>
+                    <Separator />
+                    <div className="flex items-start gap-3 text-sm text-muted-foreground">
+                      <Code2 className="w-4 h-4 shrink-0 mt-0.5" />
+                      <p>The embedded page is fully responsive and updates automatically whenever you change your services or availability — no re-pasting required.</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })()}
           </motion.div>
         </TabsContent>
 
         <TabsContent value="connections">
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-            {connections.map(conn => (
-              <Card key={conn.id} className="shadow-sm">
-                <CardContent className="p-5 flex items-center gap-4">
-                  <div className="p-2.5 bg-muted rounded-lg shrink-0">
-                    <Link2 className="w-5 h-5" />
+            {/* Share your booking link */}
+            <Card className="shadow-sm">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Share2 className="w-4 h-4" />Share your booking page</CardTitle>
+                <CardDescription>Send your booking link to clients directly — no account needed for them.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {profile?.slug ? (() => {
+                  const bookingUrl = `${BASE_URL}/${profile.slug}`;
+                  const waText = encodeURIComponent(`Book an appointment with ${profile.business_name ?? "us"}: ${bookingUrl}`);
+                  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(bookingUrl)}&bgcolor=ffffff&color=0f172a&margin=12`;
+
+                  return (
+                    <>
+                      {/* URL display */}
+                      <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-xl border">
+                        <span className="flex-1 text-sm font-mono truncate">{bookingUrl}</span>
+                        <Button variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => copyText(bookingUrl, "share-url")}>
+                          {copiedKey === "share-url" ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                          {copiedKey === "share-url" ? "Copied!" : "Copy link"}
+                        </Button>
+                        <Button variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => window.open(bookingUrl, "_blank")}>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          Open
+                        </Button>
+                      </div>
+
+                      {/* Share buttons */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <a
+                          href={`https://wa.me/?text=${waText}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex flex-col items-center gap-2 p-4 border rounded-xl hover:border-green-400 hover:bg-green-50 transition-all group"
+                        >
+                          <div className="w-9 h-9 rounded-full bg-green-500 flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <MessageSquare className="w-4 h-4 text-white" />
+                          </div>
+                          <span className="text-xs font-medium">WhatsApp</span>
+                        </a>
+                        <a
+                          href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(bookingUrl)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex flex-col items-center gap-2 p-4 border rounded-xl hover:border-blue-400 hover:bg-blue-50 transition-all group"
+                        >
+                          <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <Facebook className="w-4 h-4 text-white" />
+                          </div>
+                          <span className="text-xs font-medium">Facebook</span>
+                        </a>
+                        <a
+                          href={`https://www.instagram.com/`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex flex-col items-center gap-2 p-4 border rounded-xl hover:border-pink-400 hover:bg-pink-50 transition-all group"
+                          title="Add your booking link to your Instagram bio"
+                        >
+                          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <Instagram className="w-4 h-4 text-white" />
+                          </div>
+                          <span className="text-xs font-medium">Instagram bio</span>
+                        </a>
+                        <button
+                          onClick={() => setShowQr(v => !v)}
+                          className="flex flex-col items-center gap-2 p-4 border rounded-xl hover:border-primary/40 hover:bg-primary/5 transition-all group"
+                        >
+                          <div className="w-9 h-9 rounded-full bg-foreground flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <QrCode className="w-4 h-4 text-background" />
+                          </div>
+                          <span className="text-xs font-medium">QR Code</span>
+                        </button>
+                      </div>
+
+                      {/* QR Code panel */}
+                      {showQr && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          className="border rounded-xl p-5 flex flex-col sm:flex-row items-center gap-5 bg-muted/30"
+                        >
+                          <img
+                            src={qrUrl}
+                            alt="Booking page QR code"
+                            className="w-36 h-36 rounded-lg border shadow-sm"
+                          />
+                          <div className="space-y-2 text-center sm:text-left">
+                            <p className="font-semibold text-sm">Scan to book</p>
+                            <p className="text-xs text-muted-foreground leading-relaxed">Print this QR code and display it at your reception, on flyers, or business cards. Clients scan it to book instantly.</p>
+                            <a
+                              href={qrUrl}
+                              download="nibook-qr.png"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <Button variant="outline" size="sm" className="gap-1.5 mt-1">
+                                <Copy className="w-3.5 h-3.5" />
+                                Save QR image
+                              </Button>
+                            </a>
+                          </div>
+                        </motion.div>
+                      )}
+
+                      {/* Instagram tip */}
+                      <div className="flex items-start gap-3 p-3.5 bg-pink-50 border border-pink-200 rounded-xl text-sm">
+                        <Instagram className="w-4 h-4 text-pink-600 shrink-0 mt-0.5" />
+                        <p className="text-pink-800">
+                          <strong>Instagram tip:</strong> Go to your profile → Edit profile → Website, and paste your booking link. Your followers can book directly from your bio.
+                        </p>
+                      </div>
+                    </>
+                  );
+                })() : (
+                  <p className="text-sm text-muted-foreground py-4 text-center">
+                    Complete your business profile first to get your shareable booking link.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Google Calendar */}
+            <Card className="shadow-sm">
+              <CardContent className="p-5 flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl shrink-0 overflow-hidden border">
+                  <img src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Google_Calendar_icon_%282020%29.svg" alt="Google Calendar" className="w-full h-full object-contain p-1.5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold">Google Calendar</p>
+                  <p className="text-sm text-muted-foreground">Automatically add new bookings to your Google Calendar</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 gap-1">
+                    <Clock className="w-3 h-3" />Coming soon
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Webhook / API */}
+            <Card className="shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2"><Link2 className="w-4 h-4" />Webhook endpoint</CardTitle>
+                <CardDescription>Receive a POST request to your own server whenever a booking is created, cancelled, or updated.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Your webhook URL</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="https://yoursite.com/webhooks/nibook"
+                      className="font-mono text-xs h-8"
+                      onChange={() => setHasChanges(true)}
+                    />
+                    <Button size="sm" variant="outline" className="shrink-0 h-8 text-xs">Save</Button>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold">{conn.name}</p>
-                    <p className="text-sm text-muted-foreground">{conn.description}</p>
+                  <p className="text-xs text-muted-foreground">We'll send a JSON payload with event type and booking details.</p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Events sent</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {["booking.created", "booking.cancelled", "booking.rescheduled", "payment.received"].map(e => (
+                      <Badge key={e} variant="outline" className="font-mono text-xs">{e}</Badge>
+                    ))}
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {conn.connected
-                      ? <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 gap-1"><Check className="w-3 h-3" />Connected</Badge>
-                      : <Badge variant="outline" className="text-muted-foreground">Not connected</Badge>
-                    }
-                    <Button variant="outline" size="sm" className="h-8 text-xs">
-                      {conn.connected ? "Disconnect" : "Connect"}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-            <p className="text-xs text-muted-foreground text-center pt-2">
-              Connections require a Pro plan. <button className="text-primary underline">Upgrade now</button>
-            </p>
+                </div>
+                <div className="p-3 bg-muted/40 rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">Example payload</p>
+                  <pre className="text-xs font-mono text-foreground/80 whitespace-pre-wrap">{`{
+  "event": "booking.created",
+  "business": "${profile?.slug ?? "your-slug"}",
+  "booking": { "id": "...", "client": "...", "service": "...", "at": "..." }
+}`}</pre>
+                </div>
+              </CardContent>
+            </Card>
           </motion.div>
         </TabsContent>
 
