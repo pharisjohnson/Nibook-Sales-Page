@@ -73,11 +73,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) return { error: (error as any).message ?? "Verification failed" };
     if (data?.user) {
       setUser(data.user);
-      const sessionToken = data.accessToken ?? null;
-      if (sessionToken) setSession({ id: data.user.id, email: data.user.email ?? "" }, sessionToken);
+      const raw = data as any;
+      const sessionToken = data.accessToken ?? raw?.session?.access_token ?? raw?.access_token ?? null;
+      if (sessionToken) {
+        setSession({ id: data.user.id, email: data.user.email ?? "" }, sessionToken);
+        insforge.setAccessToken(sessionToken);
+      }
       try {
-        await insforge.database.from("profiles").insert({ id: data.user.id, plan: "trial" });
-      } catch (_) { /* row already exists — fine */ }
+        // Create the profile row if the DB trigger didn't fire; plan defaults to 'starter' in schema
+        await insforge.database.from("profiles").insert({ id: data.user.id });
+      } catch (_) { /* row already exists or RLS will let the onboarding PATCH create it */ }
       track.signedUp();
     }
     return { error: null };

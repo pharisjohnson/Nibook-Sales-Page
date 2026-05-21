@@ -23,3 +23,12 @@ export function getInsforgeAdmin() {
   }
   return _client;
 }
+
+/**
+ * Creates a per-request InsForge client authenticated as the calling user.
+ * The edgeFunctionToken makes PostgREST evaluate RLS as the user (auth.uid() = user id),
+ * which satisfies UPDATE/INSERT policies without needing a service-role bypass.
+ */
+export function createUserClient(userToken: string) {
+  return createClient({ baseUrl: url, anonKey: serviceKey, edgeFunctionToken: userToken });
+}

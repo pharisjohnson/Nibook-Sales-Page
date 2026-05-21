@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { getInsforgeAdmin } from "../lib/insforge.js";
+import { getInsforgeAdmin, createUserClient } from "../lib/insforge.js";
 
 const router: IRouter = Router();
 
@@ -17,6 +17,9 @@ router.get("/profile/:id", async (req: Request, res: Response) => {
 
 router.patch("/profile/:id", async (req: Request, res: Response) => {
   const { id } = req.params;
+  const authHeader = req.headers.authorization;
+  const userToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+
   const updates = req.body as Record<string, unknown>;
   const allowed = [
     "business_name", "slug", "phone", "location", "bio", "category",
@@ -27,9 +30,26 @@ router.patch("/profile/:id", async (req: Request, res: Response) => {
     "google_refresh_token", "google_access_token", "google_token_expiry", "google_calendar_email",
   ];
   const safe = Object.fromEntries(Object.entries(updates).filter(([k]) => allowed.includes(k)));
+
+  // Ensure the requested slug is unique — auto-suffix with -1, -2, … if taken by another profile
+  if (safe.slug && typeof safe.slug === "string") {
+    const admin = getInsforgeAdmin();
+    const baseSlug = safe.slug as string;
+    let slug = baseSlug;
+    let attempt = 0;
+    while (true) {
+      const { data: existing } = await admin.database
+        .from("profiles").select("id").eq("slug", slug).neq("id", id).limit(1);
+      if (!Array.isArray(existing) || existing.length === 0) { safe.slug = slug; break; }
+      attempt++;
+      slug = `${baseSlug}-${attempt}`;
+    }
+  }
+
   try {
-    const db = getInsforgeAdmin();
-    // upsert so the row is created if it doesn't exist yet (e.g. email-verified users)
+    // Use the user's own JWT so PostgREST evaluates RLS as auth.uid() = user id.
+    // Falls back to admin client if no token is present (e.g. server-side calls).
+    const db = userToken ? createUserClient(userToken) : getInsforgeAdmin();
     const { data, error } = await db.database
       .from("profiles")
       .upsert({ id, ...safe }, { onConflict: "id" })
