@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,7 @@ import {
   Palette, MessageSquare, Link2, CreditCard, HelpCircle, Save,
   Check, Phone, Building2, Smartphone, Wallet, ExternalLink,
   Code2, FileText, Copy, Eye, EyeOff, Camera, ImagePlus, Trash2,
-  Share2, QrCode, Instagram, Facebook, Globe, Clock,
+  Share2, QrCode, Instagram, Facebook, Globe, Clock, AlertCircle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
@@ -44,7 +44,7 @@ const BASE_URL = "https://nibook.noonstudio.africa";
 export default function SettingsPage() {
   const { toast } = useToast();
   const { user } = useAuth();
-  const { profile, updateProfile } = useProfile();
+  const { profile, updateProfile, refresh: refreshProfile } = useProfile();
   const [selectedTheme, setSelectedTheme] = useState("classic");
   const [hasChanges, setHasChanges] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -70,6 +70,8 @@ export default function SettingsPage() {
   const [embedType, setEmbedType] = useState<"iframe" | "button">("iframe");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [showQr, setShowQr] = useState(false);
+  const [gcalConnecting, setGcalConnecting] = useState(false);
+  const [gcalDisconnecting, setGcalDisconnecting] = useState(false);
 
   useEffect(() => {
     if (profile) {
@@ -90,6 +92,23 @@ export default function SettingsPage() {
       setBusinessEmail(user.email ?? "");
     }
   }, [profile, user]);
+
+  // Handle redirect back from Google OAuth
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const googleStatus = params.get("google");
+    if (!googleStatus) return;
+    // Strip the param from the URL without a reload
+    params.delete("google");
+    const newUrl = window.location.pathname + (params.toString() ? `?${params}` : "");
+    window.history.replaceState({}, "", newUrl);
+    if (googleStatus === "connected") {
+      toast({ title: "Google Calendar connected", description: "New bookings will now appear in your Google Calendar." });
+      refreshProfile();
+    } else if (googleStatus === "error") {
+      toast({ title: "Google Calendar connection failed", description: "Please try again.", variant: "destructive" });
+    }
+  }, []);
 
   const togglePayment = (id: string) => {
     setPayments(payments.map(p => p.id === id ? { ...p, enabled: !p.enabled } : p));
@@ -120,6 +139,34 @@ export default function SettingsPage() {
 
   const getInitials = (name: string) =>
     name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase() || "B";
+
+  async function connectGoogleCalendar() {
+    if (!user) return;
+    setGcalConnecting(true);
+    try {
+      const res = await fetch(`/api/integrations/google/auth-url?user_id=${user.id}`);
+      const json = await res.json() as { url?: string; error?: string };
+      if (!json.url) throw new Error(json.error ?? "Failed to get auth URL");
+      window.location.href = json.url;
+    } catch (err) {
+      toast({ title: "Connection failed", description: String(err), variant: "destructive" });
+      setGcalConnecting(false);
+    }
+  }
+
+  async function disconnectGoogleCalendar() {
+    if (!user) return;
+    setGcalDisconnecting(true);
+    try {
+      await fetch(`/api/integrations/google/${user.id}`, { method: "DELETE" });
+      refreshProfile();
+      toast({ title: "Google Calendar disconnected" });
+    } catch {
+      toast({ title: "Failed to disconnect", variant: "destructive" });
+    } finally {
+      setGcalDisconnecting(false);
+    }
+  }
 
   function copyText(text: string, key: string) {
     navigator.clipboard.writeText(text);
@@ -820,21 +867,77 @@ export default function SettingsPage() {
 
             {/* Google Calendar */}
             <Card className="shadow-sm">
-              <CardContent className="p-5 flex items-center gap-4">
-                <div className="w-10 h-10 rounded-xl shrink-0 overflow-hidden border">
-                  <img src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Google_Calendar_icon_%282020%29.svg" alt="Google Calendar" className="w-full h-full object-contain p-1.5" />
+              <CardContent className="p-5 space-y-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-xl shrink-0 overflow-hidden border bg-white flex items-center justify-center">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Google_Calendar_icon_%282020%29.svg" alt="Google Calendar" className="w-7 h-7 object-contain" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold">Google Calendar</p>
+                    <p className="text-sm text-muted-foreground">
+                      {profile?.google_calendar_email
+                        ? <>Connected as <strong>{profile.google_calendar_email}</strong></>
+                        : "Automatically add new bookings to your Google Calendar"
+                      }
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {profile?.google_calendar_email ? (
+                      <>
+                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 gap-1">
+                          <Check className="w-3 h-3" />Connected
+                        </Badge>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 text-xs text-destructive border-destructive/30 hover:bg-destructive/5"
+                          disabled={gcalDisconnecting}
+                          onClick={disconnectGoogleCalendar}
+                        >
+                          {gcalDisconnecting ? <Loader2 className="w-3 h-3 animate-spin" /> : "Disconnect"}
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs gap-1.5"
+                        disabled={gcalConnecting}
+                        onClick={connectGoogleCalendar}
+                      >
+                        {gcalConnecting ? <Loader2 className="w-3 h-3 animate-spin" /> : <ExternalLink className="w-3 h-3" />}
+                        {gcalConnecting ? "Redirecting…" : "Connect"}
+                      </Button>
+                    )}
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold">Google Calendar</p>
-                  <p className="text-sm text-muted-foreground">Automatically add new bookings to your Google Calendar</p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 gap-1">
-                    <Clock className="w-3 h-3" />Coming soon
-                  </Badge>
-                </div>
+
+                {profile?.google_calendar_email && (
+                  <div className="p-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-800 flex items-start gap-2">
+                    <Check className="w-4 h-4 shrink-0 mt-0.5 text-green-600" />
+                    <p>Every new booking will automatically appear in your Google Calendar with client details and a 30-minute reminder.</p>
+                  </div>
+                )}
+
+                {!profile?.google_calendar_email && (
+                  <div className="p-3 bg-muted/40 rounded-xl text-xs text-muted-foreground space-y-1">
+                    <p className="font-medium text-foreground text-sm">What gets synced</p>
+                    <ul className="space-y-0.5 pl-1">
+                      <li>• New bookings added as calendar events</li>
+                      <li>• Client name, phone & service in the event description</li>
+                      <li>• 30-minute popup reminder + email reminder 1 hour before</li>
+                    </ul>
+                  </div>
+                )}
               </CardContent>
             </Card>
+
+            {!process.env.GOOGLE_CLIENT_ID && (
+              <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-3">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <p>To enable Google Calendar, add <code className="font-mono">GOOGLE_CLIENT_ID</code>, <code className="font-mono">GOOGLE_CLIENT_SECRET</code>, and <code className="font-mono">APP_URL</code> to your Vercel environment variables, then redeploy.</p>
+              </div>
+            )}
 
             {/* Webhook / API */}
             <Card className="shadow-sm">

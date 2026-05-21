@@ -26,6 +26,7 @@ export interface Profile {
   payout_bank_name: string | null;
   payout_bank_account: string | null;
   payout_account_name: string | null;
+  google_calendar_email: string | null;
   created_at: string;
 }
 
