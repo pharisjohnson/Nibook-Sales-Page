@@ -23,11 +23,17 @@ router.patch("/profile/:id", async (req: Request, res: Response) => {
     "logo_url", "cover_url", "onboarding_completed", "plan", "avatar_url",
     "mpesa_paybill", "mpesa_account", "whatsapp_enabled", "whatsapp_phone",
     "reminder_hours", "cancellation_policy", "booking_widget_theme",
+    "payout_mobile", "payout_bank_name", "payout_bank_account", "payout_account_name",
   ];
   const safe = Object.fromEntries(Object.entries(updates).filter(([k]) => allowed.includes(k)));
   try {
     const db = getInsforgeAdmin();
-    const { data, error } = await db.database.from("profiles").update(safe).eq("id", id).select().single();
+    // upsert so the row is created if it doesn't exist yet (e.g. email-verified users)
+    const { data, error } = await db.database
+      .from("profiles")
+      .upsert({ id, ...safe }, { onConflict: "id" })
+      .select()
+      .single();
     if (error) { res.status(500).json({ error: error.message }); return; }
     res.json({ data });
   } catch (err) {
@@ -57,6 +63,28 @@ router.get("/directory", async (_req: Request, res: Response) => {
       .order("business_name");
     if (error) { res.status(500).json({ error: error.message }); return; }
     res.json({ data });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+router.get("/categories", async (_req: Request, res: Response) => {
+  try {
+    const db = getInsforgeAdmin();
+    const { data } = await db.database.from("categories").select("name").order("name");
+    res.json({ data: (data ?? []).map((r: any) => r.name) });
+  } catch {
+    res.json({ data: [] });
+  }
+});
+
+router.post("/categories", async (req: Request, res: Response) => {
+  const { name } = req.body as { name?: string };
+  if (!name?.trim()) { res.status(400).json({ error: "name required" }); return; }
+  try {
+    const db = getInsforgeAdmin();
+    await db.database.from("categories").upsert({ name: name.trim() }, { onConflict: "name" });
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }

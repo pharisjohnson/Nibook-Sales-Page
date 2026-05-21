@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
-import { Calendar, ArrowRight, ArrowLeft, Check, Loader2, Plus, Scissors, Clock, DollarSign } from "lucide-react";
+import { ArrowRight, ArrowLeft, Check, Loader2, Plus, Scissors, Clock, DollarSign } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -10,7 +10,7 @@ import { useProfile } from "@/lib/profile";
 import { apiFetch } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
-const categories = [
+const DEFAULT_CATEGORIES = [
   "Hair & Beauty", "Barbershop", "Spa & Wellness", "Fitness & Gym",
   "Photography", "Massage Therapy", "Nail Studio", "Tattoo & Piercing",
   "Coaching & Consulting", "Other",
@@ -22,7 +22,7 @@ const STEPS = ["Business Info", "Your Services", "You're set!"];
 
 export default function OnboardingPage() {
   const { user } = useAuth();
-  const { updateProfile } = useProfile();
+  const { profile, updateProfile } = useProfile();
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [step, setStep] = useState(0);
@@ -32,6 +32,29 @@ export default function OnboardingPage() {
   const [phone, setPhone] = useState("");
   const [location, setLocation] = useState("");
   const [category, setCategory] = useState("");
+  const [customCategory, setCustomCategory] = useState("");
+  const [extraCategories, setExtraCategories] = useState<string[]>([]);
+
+  // Pre-populate from profile (business name entered at signup)
+  useEffect(() => {
+    if (profile?.business_name && !bizName) setBizName(profile.business_name);
+    if (profile?.phone && !phone) setPhone(profile.phone);
+    if (profile?.location && !location) setLocation(profile.location);
+    if (profile?.category && !category) setCategory(profile.category);
+  }, [profile]);
+
+  // Load custom categories from DB
+  useEffect(() => {
+    apiFetch<{ data: string[] }>("/categories").then(({ data }) => {
+      if (data?.data?.length) setExtraCategories(data.data);
+    });
+  }, []);
+
+  const allCategories = [
+    ...DEFAULT_CATEGORIES.filter(c => c !== "Other"),
+    ...extraCategories.filter(c => !DEFAULT_CATEGORIES.includes(c)),
+    "Other",
+  ];
 
   const [services, setServices] = useState<Service[]>([{ name: "", price: "", duration: "60" }]);
 
@@ -57,17 +80,29 @@ export default function OnboardingPage() {
       toast({ title: "Business name required", variant: "destructive" });
       return;
     }
+    const finalCategory = category === "Other"
+      ? customCategory.trim() || "Other"
+      : category || null;
+
+    if (category === "Other" && customCategory.trim()) {
+      // Save custom category to DB so future users can see it
+      apiFetch("/categories", {
+        method: "POST",
+        body: JSON.stringify({ name: customCategory.trim() }),
+      }).catch(() => {/* non-blocking */});
+    }
+
     setLoading(true);
     const slug = bizName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
     const { error } = await updateProfile({
       business_name: bizName.trim(),
       phone: phone.trim() || null,
       location: location.trim() || null,
-      category: category || null,
+      category: finalCategory,
       slug,
     });
     setLoading(false);
-    if (error && !error.includes("duplicate")) {
+    if (error) {
       toast({ title: "Error saving profile", description: error, variant: "destructive" });
       return;
     }
@@ -134,11 +169,11 @@ export default function OnboardingPage() {
                 <div className="space-y-1.5">
                   <Label>Category</Label>
                   <div className="grid grid-cols-2 gap-2">
-                    {categories.map(cat => (
+                    {allCategories.map(cat => (
                       <button
                         key={cat}
                         type="button"
-                        onClick={() => setCategory(cat)}
+                        onClick={() => { setCategory(cat); if (cat !== "Other") setCustomCategory(""); }}
                         className={`text-xs text-left px-3 py-2 rounded-lg border transition-all ${
                           category === cat ? "bg-primary text-white border-primary" : "border-border hover:border-primary/40"
                         }`}
@@ -147,6 +182,16 @@ export default function OnboardingPage() {
                       </button>
                     ))}
                   </div>
+                  {category === "Other" && (
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="pt-2">
+                      <Input
+                        placeholder="Describe your industry (e.g. Veterinary, Event Planning)"
+                        value={customCategory}
+                        onChange={e => setCustomCategory(e.target.value)}
+                        autoFocus
+                      />
+                    </motion.div>
+                  )}
                 </div>
 
                 <div className="space-y-1.5">
