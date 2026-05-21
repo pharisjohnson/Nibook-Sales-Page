@@ -49,26 +49,27 @@ router.post("/bookings", async (req: Request, res: Response) => {
     // Non-blocking: sync to Google Calendar if owner has connected it
     if (data && owner_id) {
       const db2 = getInsforgeAdmin();
-      db2.database
-        .from("profiles")
-        .select("google_refresh_token, google_access_token, business_name")
-        .eq("id", owner_id as string)
-        .single()
-        .then(({ data: profile }) => {
-          if (!profile?.google_refresh_token) return;
-          return db2.database
-            .from("services")
-            .select("name, price")
-            .eq("id", (service_id as string) ?? "")
-            .single()
-            .then(({ data: svc }) =>
-              syncBookingToCalendar(
-                { ...data, services: svc ?? null },
-                profile,
-              )
-            );
-        })
-        .catch(err => console.error("[GCal sync]", err));
+      Promise.resolve(
+        db2.database
+          .from("profiles")
+          .select("google_refresh_token, google_access_token, business_name")
+          .eq("id", owner_id as string)
+          .single()
+          .then(({ data: profile }) => {
+            if (!profile?.google_refresh_token) return;
+            return db2.database
+              .from("services")
+              .select("name, price")
+              .eq("id", (service_id as string) ?? "")
+              .single()
+              .then(({ data: svc }) =>
+                syncBookingToCalendar(
+                  { ...data, services: svc ?? null },
+                  profile,
+                )
+              );
+          })
+      ).catch((err: unknown) => console.error("[GCal sync]", err));
     }
   } catch (err) {
     res.status(500).json({ error: String(err) });

@@ -108,7 +108,7 @@ router.get("/jenga/collect/status/:reference", async (req: Request, res: Respons
   const signatureFields = `${MERCHANT_CODE}${reference}`;
   try {
     const { ok, data } = await jengaGet(
-      `${ENDPOINTS.collectStatus}/${encodeURIComponent(reference)}`,
+      `${ENDPOINTS.collectStatus}/${encodeURIComponent(String(reference))}`,
       signatureFields,
     );
 
