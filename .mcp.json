@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "nibook": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["apps/mcp/dist/index.mjs"],
+      "env": {
+        "NIBOOK_API_URL": "https://nibook.noonstudio.africa/api",
+        "NIBOOK_OWNER_ID": ""
+      }
+    }
+  }
+}

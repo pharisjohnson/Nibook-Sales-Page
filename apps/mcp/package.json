@@ -1,0 +1,24 @@
+{
+  "name": "@workspace/nibook-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MCP server for managing Nibook bookings, services, and analytics via Claude",
+  "type": "module",
+  "bin": {
+    "nibook-mcp": "./dist/index.mjs"
+  },
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.mjs --banner:js=\"import { createRequire } from 'module'; const require = createRequire(import.meta.url);\"",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.3",
+    "esbuild": "^0.27.3",
+    "tsx": "^4.21.0"
+  }
+}
