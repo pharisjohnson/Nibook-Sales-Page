@@ -17,12 +17,12 @@ router.get("/services", async (req: Request, res: Response) => {
 });
 
 router.post("/services", async (req: Request, res: Response) => {
-  const { owner_id, name, price, duration_minutes, image_url, is_active } = req.body as Record<string, unknown>;
+  const { owner_id, name, price, duration_minutes, image_url, is_active, description } = req.body as Record<string, unknown>;
   if (!owner_id || !name) { res.status(400).json({ error: "owner_id and name required" }); return; }
   try {
     const { data, error } = await getInsforgeAdmin().database
       .from("services")
-      .insert({ owner_id, name, price: price ?? 0, duration_minutes: duration_minutes ?? 60, image_url: image_url ?? null, is_active: is_active ?? true })
+      .insert({ owner_id, name, price: price ?? 0, duration_minutes: duration_minutes ?? 60, image_url: image_url ?? null, is_active: is_active ?? true, description: description ?? null })
       .select().single();
     if (error) { res.status(500).json({ error: error.message }); return; }
     res.status(201).json({ data });

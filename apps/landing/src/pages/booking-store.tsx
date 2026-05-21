@@ -30,6 +30,7 @@ type Business = {
 type Service = {
   id: string;
   name: string;
+  description: string | null;
   price: number;
   duration_minutes: number;
   is_active: boolean;
@@ -438,6 +439,9 @@ export default function BookingStorePage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-sm leading-tight">{svc.name}</p>
+                      {svc.description && (
+                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2 leading-snug">{svc.description}</p>
+                      )}
                       <div className="flex items-center gap-3 mt-1 text-xs">
                         <span className="font-bold text-foreground">KES {svc.price.toLocaleString()}</span>
                         <span className="flex items-center gap-1 text-muted-foreground">

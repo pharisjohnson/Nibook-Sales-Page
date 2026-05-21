@@ -25,6 +25,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { apiFetch, uploadFile } from "@/lib/api";
 import { Loader2 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 
 const MAX_IMAGES = 2;
 
@@ -34,6 +35,7 @@ type IntakeField = { id: number; label: string; type: FieldType; required: boole
 type Service = {
   id: string;
   name: string;
+  description: string;
   price: string;
   duration: number;
   active: boolean;
@@ -334,7 +336,7 @@ export default function ServicesPage() {
   const [loadingServices, setLoadingServices] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
-  const [form, setForm] = useState({ name: "", price: "", duration: "60" });
+  const [form, setForm] = useState({ name: "", description: "", price: "", duration: "60" });
   const [formImages, setFormImages] = useState<string[]>([]);
   const [formIntakeFields, setFormIntakeFields] = useState<IntakeField[]>([]);
   const [formError, setFormError] = useState("");
@@ -348,6 +350,7 @@ export default function ServicesPage() {
           setServices(res.data.map((s: any, i: number) => ({
             id: s.id,
             name: s.name,
+            description: s.description ?? "",
             price: Number(s.price ?? 0).toLocaleString(),
             duration: s.duration_minutes ?? 60,
             active: s.is_active ?? true,
@@ -366,7 +369,7 @@ export default function ServicesPage() {
       return;
     }
     setEditingService(null);
-    setForm({ name: "", price: "", duration: "60" });
+    setForm({ name: "", description: "", price: "", duration: "60" });
     setFormImages([]);
     setFormIntakeFields([]);
     setFormError("");
@@ -375,7 +378,7 @@ export default function ServicesPage() {
 
   const openEdit = (service: Service) => {
     setEditingService(service);
-    setForm({ name: service.name, price: service.price.replace(/,/g, ""), duration: String(service.duration) });
+    setForm({ name: service.name, description: service.description, price: service.price.replace(/,/g, ""), duration: String(service.duration) });
     setFormImages(service.images);
     setFormIntakeFields(service.intakeFields);
     setFormError("");
@@ -393,24 +396,25 @@ export default function ServicesPage() {
     if (editingService) {
       const { error } = await apiFetch(`/services/${editingService.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ name: form.name.trim(), price: priceNum, duration_minutes: Number(form.duration), image_url: formImages[0] ?? null }),
+        body: JSON.stringify({ name: form.name.trim(), description: form.description.trim() || null, price: priceNum, duration_minutes: Number(form.duration), image_url: formImages[0] ?? null }),
       });
       if (error) { setFormError("Failed to update service."); return; }
       setServices(services.map(s =>
         s.id === editingService.id
-          ? { ...s, name: form.name, price: priceFormatted, duration: Number(form.duration), images: formImages, intakeFields: formIntakeFields }
+          ? { ...s, name: form.name, description: form.description, price: priceFormatted, duration: Number(form.duration), images: formImages, intakeFields: formIntakeFields }
           : s
       ));
       toast({ title: "Service updated", description: `"${form.name}" has been updated.` });
     } else {
       const { data: svcRes, error } = await apiFetch<{ data: any }>("/services", {
         method: "POST",
-        body: JSON.stringify({ owner_id: user.id, name: form.name.trim(), price: priceNum, duration_minutes: Number(form.duration), image_url: formImages[0] ?? null, is_active: true }),
+        body: JSON.stringify({ owner_id: user.id, name: form.name.trim(), description: form.description.trim() || null, price: priceNum, duration_minutes: Number(form.duration), image_url: formImages[0] ?? null, is_active: true }),
       });
       if (error || !svcRes?.data) { setFormError("Failed to add service."); return; }
       const newService: Service = {
         id: svcRes.data.id,
         name: form.name,
+        description: form.description,
         price: priceFormatted,
         duration: Number(form.duration),
         active: true,
@@ -529,6 +533,9 @@ export default function ServicesPage() {
                     {service.active ? "Active" : "Draft"}
                   </Badge>
                 </div>
+                {service.description && (
+                  <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{service.description}</p>
+                )}
               </CardHeader>
               <CardContent className="pb-4">
                 <div className="flex items-center gap-4 text-sm text-muted-foreground">
@@ -604,6 +611,20 @@ export default function ServicesPage() {
                 placeholder="e.g. Hair Braiding, Massage, Coaching Call"
                 value={form.name}
                 onChange={e => { setForm({ ...form, name: e.target.value }); setFormError(""); }}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="svc-desc">
+                Description <span className="text-muted-foreground font-normal text-xs">(optional)</span>
+              </Label>
+              <Textarea
+                id="svc-desc"
+                placeholder="Describe what's included, who it's for, or any prep clients should know…"
+                rows={3}
+                value={form.description}
+                onChange={e => setForm({ ...form, description: e.target.value })}
+                className="resize-none text-sm"
               />
             </div>
 
