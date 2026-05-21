@@ -18,7 +18,7 @@ export default function FeatureRequestsPage() {
     const bodyText = encodeURIComponent(
       `Feature: ${title}\nCategory: ${category}\n\nDescription:\n${description}`
     );
-    window.location.href = `mailto:hello@nibook.co?subject=${subject}&body=${bodyText}`;
+    window.location.href = `mailto:nibook@noonstudio.africa?subject=${subject}&body=${bodyText}`;
     setState(s => ({ ...s, submitted: true }));
   }
 
@@ -26,7 +26,7 @@ export default function FeatureRequestsPage() {
     <div className="min-h-screen bg-background font-sans text-foreground">
       <Navbar />
 
-      <section className="pt-28 pb-20 bg-sky-600 text-white overflow-hidden relative">
+      <section className="pt-36 pb-28 bg-sky-600 text-white overflow-hidden relative">
         <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full blur-3xl" />
         <div className="absolute bottom-0 left-0 w-80 h-80 bg-black/10 rounded-full blur-3xl" />
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">

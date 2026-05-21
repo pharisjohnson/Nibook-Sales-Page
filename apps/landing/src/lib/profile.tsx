@@ -22,6 +22,10 @@ export interface Profile {
   reminder_hours: number | null;
   cancellation_policy: string | null;
   booking_widget_theme: string | null;
+  payout_mobile: string | null;
+  payout_bank_name: string | null;
+  payout_bank_account: string | null;
+  payout_account_name: string | null;
   created_at: string;
 }
 

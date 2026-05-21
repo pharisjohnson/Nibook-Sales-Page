@@ -11,6 +11,7 @@ import { apiFetch } from "@/lib/api";
 import {
   MapPin, Clock, Phone, MessageSquare, ChevronRight,
   Calendar, Scissors, Check, ArrowLeft, Share2, Heart, Loader2,
+  Smartphone, AlertCircle,
 } from "lucide-react";
 
 type Business = {
@@ -55,11 +56,15 @@ export default function BookingStorePage() {
   const [liked, setLiked] = useState(false);
 
   const [selectedService, setSelectedService] = useState<Service | null>(null);
-  const [step, setStep] = useState<"pick-time" | "details" | "confirm">("pick-time");
+  const [step, setStep] = useState<"pick-time" | "details" | "payment" | "confirm">("pick-time");
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
   const [selectedTime, setSelectedTime] = useState("");
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
+  const [payPhone, setPayPhone] = useState("");
+  const [paymentRef, setPaymentRef] = useState("");
+  const [paymentState, setPaymentState] = useState<"idle" | "pending" | "polling" | "paid" | "failed">("idle");
+  const [bookingId, setBookingId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -84,13 +89,18 @@ export default function BookingStorePage() {
     setSelectedTime("");
     setClientName("");
     setClientPhone("");
+    setPayPhone("");
+    setPaymentRef("");
+    setPaymentState("idle");
+    setBookingId(null);
   };
 
-  const handleConfirm = async () => {
+  // Step: details → create booking, then move to payment
+  const handleDetails = async () => {
     if (!clientName.trim() || !clientPhone.trim() || !business || !selectedService) return;
     setSubmitting(true);
     const isoScheduled = new Date(`${selectedDate}T${selectedTime}`).toISOString();
-    const { error } = await apiFetch("/bookings", {
+    const { data, error } = await apiFetch<{ data: { id: string } }>("/bookings", {
       method: "POST",
       body: JSON.stringify({
         owner_id: business.id,
@@ -104,11 +114,51 @@ export default function BookingStorePage() {
       }),
     });
     setSubmitting(false);
-    if (error) {
-      toast({ title: "Booking failed", description: error, variant: "destructive" });
+    if (error || !data?.data?.id) {
+      toast({ title: "Booking failed", description: error ?? "Try again", variant: "destructive" });
       return;
     }
-    setStep("confirm");
+    setBookingId(data.data.id);
+    setPayPhone(clientPhone.trim());
+    setStep("payment");
+  };
+
+  // Step: payment → STK push, then poll
+  const handlePay = async () => {
+    if (!payPhone.trim() || !bookingId || !selectedService || !business) return;
+    setPaymentState("pending");
+    const { data, error } = await apiFetch<{ success: boolean; reference: string }>("/jenga/collect", {
+      method: "POST",
+      body: JSON.stringify({
+        booking_id: bookingId,
+        phone: payPhone.trim(),
+        amount: selectedService.price,
+        business_name: business.business_name,
+      }),
+    });
+    if (error || !data?.success) {
+      setPaymentState("failed");
+      toast({ title: "Payment failed", description: error ?? "Could not initiate M-Pesa prompt", variant: "destructive" });
+      return;
+    }
+    setPaymentRef(data.reference);
+    setPaymentState("polling");
+    // Poll every 4 seconds for up to 2 minutes
+    let attempts = 0;
+    const poll = setInterval(async () => {
+      attempts++;
+      if (attempts > 30) { clearInterval(poll); setPaymentState("failed"); return; }
+      const { data: statusData } = await apiFetch<{ status: string }>(`/jenga/collect/status/${data.reference}`);
+      if (statusData?.status === "paid") {
+        clearInterval(poll);
+        setPaymentState("paid");
+        setStep("confirm");
+      } else if (statusData?.status === "failed") {
+        clearInterval(poll);
+        setPaymentState("failed");
+        toast({ title: "Payment not confirmed", description: "The M-Pesa prompt was declined or timed out.", variant: "destructive" });
+      }
+    }, 4000);
   };
 
   const handleDone = () => {
@@ -257,15 +307,19 @@ export default function BookingStorePage() {
       <Dialog open={!!selectedService} onOpenChange={open => { if (!open) setSelectedService(null); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{step === "confirm" ? "Booking Confirmed!" : `Book: ${selectedService?.name}`}</DialogTitle>
+            <DialogTitle>
+              {step === "confirm" ? "Booking Confirmed!" : `Book: ${selectedService?.name}`}
+            </DialogTitle>
             <DialogDescription>
               {step === "pick-time" && "Choose a date and time."}
               {step === "details" && "Enter your details to complete the booking."}
-              {step === "confirm" && "We'll send a WhatsApp confirmation shortly."}
+              {step === "payment" && "Pay securely via M-Pesa to confirm your slot."}
+              {step === "confirm" && "Payment received — you're all set!"}
             </DialogDescription>
           </DialogHeader>
 
-          {step === "confirm" ? (
+          {/* ── Confirm ── */}
+          {step === "confirm" && (
             <div className="text-center py-4 space-y-4">
               <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
                 <Check className="w-8 h-8 text-green-600" />
@@ -273,7 +327,7 @@ export default function BookingStorePage() {
               <div className="space-y-1">
                 <p className="font-semibold">{selectedService?.name}</p>
                 <p className="text-sm text-muted-foreground">{to12h(selectedTime)} · {business.business_name}</p>
-                <p className="text-sm font-medium text-primary">KES {selectedService?.price.toLocaleString()}</p>
+                <p className="text-sm font-bold text-green-600">KES {selectedService?.price.toLocaleString()} paid</p>
               </div>
               <div className="p-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-700">
                 <MessageSquare className="w-4 h-4 inline mr-1.5" />
@@ -281,7 +335,10 @@ export default function BookingStorePage() {
               </div>
               <Button className="w-full" onClick={handleDone}>Done</Button>
             </div>
-          ) : step === "pick-time" ? (
+          )}
+
+          {/* ── Pick time ── */}
+          {step === "pick-time" && (
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label>Date</Label>
@@ -310,7 +367,10 @@ export default function BookingStorePage() {
               </div>
               <Button className="w-full" disabled={!selectedTime} onClick={() => setStep("details")}>Continue</Button>
             </div>
-          ) : (
+          )}
+
+          {/* ── Details ── */}
+          {step === "details" && (
             <div className="space-y-4">
               <div className="p-3 bg-muted/40 rounded-xl text-sm">
                 <span className="font-medium">{selectedService?.name}</span> · {to12h(selectedTime)}
@@ -321,7 +381,7 @@ export default function BookingStorePage() {
                   <Input placeholder="e.g. Grace Mwangi" value={clientName} onChange={e => setClientName(e.target.value)} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>WhatsApp number</Label>
+                  <Label>WhatsApp / M-Pesa number</Label>
                   <Input placeholder="+254 7xx xxx xxx" value={clientPhone} onChange={e => setClientPhone(e.target.value)} />
                 </div>
               </div>
@@ -330,12 +390,86 @@ export default function BookingStorePage() {
                 <Button
                   className="flex-1"
                   disabled={!clientName.trim() || !clientPhone.trim() || submitting}
-                  onClick={handleConfirm}
+                  onClick={handleDetails}
                 >
                   {submitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                  Confirm Booking
+                  Next
                 </Button>
               </div>
+            </div>
+          )}
+
+          {/* ── Payment ── */}
+          {step === "payment" && (
+            <div className="space-y-4">
+              {/* Summary */}
+              <div className="p-4 bg-muted/40 rounded-xl space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">{selectedService?.name}</span>
+                  <span className="font-bold">KES {selectedService?.price.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>{to12h(selectedTime)} · {selectedDate}</span>
+                  <span>{business.business_name}</span>
+                </div>
+              </div>
+
+              {/* M-Pesa input */}
+              <div className="space-y-1.5">
+                <Label className="flex items-center gap-1.5">
+                  <Smartphone className="w-3.5 h-3.5 text-green-600" />
+                  M-Pesa number
+                </Label>
+                <Input
+                  placeholder="+254 7xx xxx xxx"
+                  value={payPhone}
+                  onChange={e => setPayPhone(e.target.value)}
+                  disabled={paymentState === "polling" || paymentState === "pending"}
+                />
+              </div>
+
+              {/* States */}
+              {(paymentState === "pending" || paymentState === "polling") && (
+                <div className="p-4 bg-green-50 border border-green-200 rounded-xl text-sm text-green-800 flex items-start gap-3">
+                  <Loader2 className="w-4 h-4 animate-spin shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold">Check your phone</p>
+                    <p className="text-green-700 text-xs mt-0.5">An M-Pesa prompt has been sent to {payPhone}. Enter your PIN to confirm.</p>
+                  </div>
+                </div>
+              )}
+
+              {paymentState === "failed" && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  Payment was not confirmed. Check your number and try again.
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setStep("details")}
+                  disabled={paymentState === "polling" || paymentState === "pending"}
+                >
+                  Back
+                </Button>
+                <Button
+                  className="flex-1 bg-green-600 hover:bg-green-700"
+                  disabled={!payPhone.trim() || paymentState === "polling" || paymentState === "pending"}
+                  onClick={handlePay}
+                >
+                  {paymentState === "polling" || paymentState === "pending"
+                    ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Waiting…</>
+                    : <>Pay KES {selectedService?.price.toLocaleString()}</>
+                  }
+                </Button>
+              </div>
+
+              <p className="text-xs text-center text-muted-foreground">
+                Powered by Jenga · Secured by M-Pesa
+              </p>
             </div>
           )}
         </DialogContent>

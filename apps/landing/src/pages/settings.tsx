@@ -379,6 +379,66 @@ export default function SettingsPage() {
               );
             })}
           </motion.div>
+
+          {/* Payout account */}
+          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mt-4">
+            <Card className="shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Payout account</CardTitle>
+                <CardDescription className="text-sm">
+                  Where Nibook sends client payments after your sessions. Funds arrive within 24 hours via Jenga.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">M-Pesa number (preferred)</Label>
+                  <Input
+                    placeholder="+254 7xx xxx xxx"
+                    value={profile?.payout_mobile ?? ""}
+                    onChange={e => { updateProfile({ payout_mobile: e.target.value }); setHasChanges(true); }}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="relative flex items-center gap-2">
+                  <div className="flex-1 h-px bg-border" />
+                  <span className="text-xs text-muted-foreground">or bank account</span>
+                  <div className="flex-1 h-px bg-border" />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Bank name</Label>
+                    <Input
+                      placeholder="e.g. Equity Bank"
+                      value={profile?.payout_bank_name ?? ""}
+                      onChange={e => { updateProfile({ payout_bank_name: e.target.value }); setHasChanges(true); }}
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Account number</Label>
+                    <Input
+                      placeholder="e.g. 0011547896523"
+                      value={profile?.payout_bank_account ?? ""}
+                      onChange={e => { updateProfile({ payout_bank_account: e.target.value }); setHasChanges(true); }}
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label className="text-xs">Account holder name</Label>
+                    <Input
+                      placeholder="As it appears on the account"
+                      value={profile?.payout_account_name ?? ""}
+                      onChange={e => { updateProfile({ payout_account_name: e.target.value }); setHasChanges(true); }}
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Nibook retains a 3% facilitation fee per booking. The remainder is transferred to your payout account.
+                </p>
+              </CardContent>
+            </Card>
+          </motion.div>
         </TabsContent>
 
         <TabsContent value="whatsapp">

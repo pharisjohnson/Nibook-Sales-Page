@@ -27,7 +27,7 @@ export function Footer() {
           {/* Brand */}
           <div className="col-span-1 md:col-span-2">
             <Link href="/" className="flex items-center mb-4 group inline-flex">
-              <img src="/nibook-wordmark.png" alt="Nibook" className="h-16 w-auto brightness-0 invert group-hover:opacity-90 transition-opacity" />
+              <img src="/nibook-wordmark.png" alt="Nibook" className="h-32 w-auto brightness-0 invert group-hover:opacity-90 transition-opacity" />
             </Link>
             <p className="text-white/60 max-w-sm mb-6 leading-relaxed">
               The professional appointment booking and business management platform built specifically for service providers in East Africa.
@@ -35,7 +35,7 @@ export function Footer() {
             <div className="flex gap-4">
               <a href="#" className="hover:text-primary transition-colors"><XIcon className="w-5 h-5" /></a>
               <a href="#" className="hover:text-primary transition-colors"><InstagramIcon className="w-5 h-5" /></a>
-              <a href="mailto:hello@nibook.co" className="hover:text-primary transition-colors"><Mail className="w-5 h-5" /></a>
+              <a href="mailto:nibook@noonstudio.africa" className="hover:text-primary transition-colors"><Mail className="w-5 h-5" /></a>
             </div>
           </div>
 

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Eye, EyeOff, Loader2, Calendar, ArrowRight } from "lucide-react";
+import { Eye, EyeOff, Loader2, ArrowRight, Mail, RotateCcw } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -15,19 +15,32 @@ interface AuthModalProps {
   defaultTab?: "signin" | "signup";
 }
 
+type ModalStep = "form" | "verify";
+
 export function AuthModal({ open, onClose, defaultTab = "signin" }: AuthModalProps) {
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, verifyEmail } = useAuth();
   const [, navigate] = useLocation();
   const [tab, setTab] = useState<"signin" | "signup">(defaultTab);
+  const [step, setStep] = useState<ModalStep>("form");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showPass, setShowPass] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState("");
+  const [otp, setOtp] = useState("");
 
   const [form, setForm] = useState({ email: "", password: "", businessName: "" });
 
   function update(key: string, value: string) {
     setForm(f => ({ ...f, [key]: value }));
     setError("");
+  }
+
+  function handleClose() {
+    // reset state on close
+    setStep("form");
+    setOtp("");
+    setError("");
+    onClose();
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -39,20 +52,63 @@ export function AuthModal({ open, onClose, defaultTab = "signin" }: AuthModalPro
       if (tab === "signin") {
         const { error: err } = await signIn(form.email, form.password);
         if (err) { setError(err); return; }
+        handleClose();
+        navigate("/dashboard");
       } else {
         if (!form.businessName.trim()) { setError("Business name is required"); return; }
-        const { error: err } = await signUp(form.email, form.password, form.businessName);
+        const { error: err, requiresVerification } = await signUp(form.email, form.password, form.businessName);
         if (err) { setError(err); return; }
+        if (requiresVerification) {
+          // Stay in modal — let user enter the emailed code
+          setPendingEmail(form.email);
+          setStep("verify");
+        } else {
+          // Auto-confirmed — go straight to onboarding
+          handleClose();
+          navigate("/onboarding");
+        }
       }
-      onClose();
-      navigate(tab === "signup" ? "/onboarding" : "/dashboard");
     } finally {
       setLoading(false);
     }
   }
 
+  async function handleVerify(e: React.FormEvent) {
+    e.preventDefault();
+    if (otp.trim().length < 6) { setError("Please enter the full 6-digit code"); return; }
+    setLoading(true);
+    setError("");
+    try {
+      const { error: err } = await verifyEmail(pendingEmail, otp.trim());
+      if (err) { setError(err); return; }
+      handleClose();
+      navigate("/onboarding");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleResend() {
+    setError("");
+    // Re-trigger signup which will resend the verification email
+    await signUp(form.email, form.password, form.businessName);
+    setOtp("");
+  }
+
+  const headerCopy = {
+    form: {
+      signin: { title: "Welcome back", desc: "Sign in to manage your bookings and business" },
+      signup: { title: "Create your account", desc: "Start your 7-day free trial — no card needed" },
+    },
+    verify: { title: "Check your email", desc: `We sent a 6-digit code to ${pendingEmail}` },
+  };
+
+  const header = step === "verify"
+    ? headerCopy.verify
+    : headerCopy.form[tab];
+
   return (
-    <Dialog open={open} onOpenChange={open => { if (!open) onClose(); }}>
+    <Dialog open={open} onOpenChange={open => { if (!open) handleClose(); }}>
       <DialogContent className="sm:max-w-sm p-0 overflow-hidden">
         {/* Header gradient */}
         <div className="bg-gradient-to-br from-primary to-primary/80 p-6 text-white">
@@ -60,100 +116,165 @@ export function AuthModal({ open, onClose, defaultTab = "signin" }: AuthModalPro
             <img src="/nibook-icon.png" alt="Nibook" className="h-[72px] w-[72px] rounded-xl object-cover" />
           </div>
           <DialogHeader>
-            <DialogTitle className="text-white text-xl">
-              {tab === "signin" ? "Welcome back" : "Create your account"}
-            </DialogTitle>
-            <DialogDescription className="text-white/70 text-sm mt-1">
-              {tab === "signin"
-                ? "Sign in to manage your bookings and business"
-                : "Start your 7-day free trial — no card needed"}
-            </DialogDescription>
+            <DialogTitle className="text-white text-xl">{header.title}</DialogTitle>
+            <DialogDescription className="text-white/70 text-sm mt-1">{header.desc}</DialogDescription>
           </DialogHeader>
         </div>
 
         <div className="p-6 space-y-5">
-          {/* Tab switcher */}
-          <div className="flex bg-muted rounded-xl p-1">
-            {(["signin", "signup"] as const).map(t => (
-              <button
-                key={t}
-                onClick={() => { setTab(t); setError(""); }}
-                className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all ${
-                  tab === t ? "bg-white shadow text-foreground" : "text-muted-foreground hover:text-foreground"
-                }`}
+          <AnimatePresence mode="wait">
+
+            {/* ── Verify step ── */}
+            {step === "verify" && (
+              <motion.div
+                key="verify"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
               >
-                {t === "signin" ? "Sign In" : "Sign Up"}
-              </button>
-            ))}
-          </div>
+                <form onSubmit={handleVerify} className="space-y-4">
+                  <div className="flex justify-center py-2">
+                    <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+                      <Mail className="w-8 h-8 text-primary" />
+                    </div>
+                  </div>
 
-          <form onSubmit={handleSubmit} className="space-y-3">
-            <AnimatePresence>
-              {tab === "signup" && (
-                <motion.div key="bizname" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
-                  <Input
-                    placeholder="Business name (e.g. Amina's Beauty Studio)"
-                    value={form.businessName}
-                    onChange={e => update("businessName", e.target.value)}
-                    required={tab === "signup"}
-                  />
-                </motion.div>
-              )}
-            </AnimatePresence>
+                  <div>
+                    <label className="block text-sm font-semibold text-foreground mb-1.5">
+                      Verification code
+                    </label>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="Enter 6-digit code"
+                      value={otp}
+                      onChange={e => { setOtp(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }}
+                      autoFocus
+                      className="text-center text-2xl tracking-[0.5em] font-mono"
+                      maxLength={6}
+                    />
+                  </div>
 
-            <Input
-              type="email"
-              placeholder="Email address"
-              value={form.email}
-              onChange={e => update("email", e.target.value)}
-              required
-              autoComplete="email"
-            />
+                  {error && (
+                    <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-sm text-red-500 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                      {error}
+                    </motion.p>
+                  )}
 
-            <div className="relative">
-              <Input
-                type={showPass ? "text" : "password"}
-                placeholder="Password"
-                value={form.password}
-                onChange={e => update("password", e.target.value)}
-                required
-                minLength={6}
-                autoComplete={tab === "signin" ? "current-password" : "new-password"}
-                className="pr-10"
-              />
-              <button
-                type="button"
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                onClick={() => setShowPass(v => !v)}
-                tabIndex={-1}
-              >
-                {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
+                  <Button type="submit" className="w-full" disabled={loading || otp.length < 6}>
+                    {loading
+                      ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Verifying…</>
+                      : <>Verify & Continue <ArrowRight className="w-4 h-4 ml-2" /></>
+                    }
+                  </Button>
 
-            {error && (
-              <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-sm text-red-500 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-                {error}
-              </motion.p>
+                  <button
+                    type="button"
+                    onClick={handleResend}
+                    className="w-full flex items-center justify-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    Resend code
+                  </button>
+                </form>
+              </motion.div>
             )}
 
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? (
-                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Please wait…</>
-              ) : (
-                <>{tab === "signin" ? "Sign In" : "Create Account"}<ArrowRight className="w-4 h-4 ml-2" /></>
-              )}
-            </Button>
-          </form>
+            {/* ── Auth form step ── */}
+            {step === "form" && (
+              <motion.div
+                key="form"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                className="space-y-5"
+              >
+                {/* Tab switcher */}
+                <div className="flex bg-muted rounded-xl p-1">
+                  {(["signin", "signup"] as const).map(t => (
+                    <button
+                      key={t}
+                      onClick={() => { setTab(t); setError(""); }}
+                      className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all ${
+                        tab === t ? "bg-white shadow text-foreground" : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {t === "signin" ? "Sign In" : "Sign Up"}
+                    </button>
+                  ))}
+                </div>
 
-          {tab === "signup" && (
-            <p className="text-xs text-center text-muted-foreground">
-              By signing up you agree to our{" "}
-              <a href="#" className="underline hover:text-primary">Terms of Service</a>{" "}
-              and{" "}
-              <a href="#" className="underline hover:text-primary">Privacy Policy</a>.
-            </p>
-          )}
+                <form onSubmit={handleSubmit} className="space-y-3">
+                  <AnimatePresence>
+                    {tab === "signup" && (
+                      <motion.div key="bizname" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
+                        <Input
+                          placeholder="Business name (e.g. Amina's Beauty Studio)"
+                          value={form.businessName}
+                          onChange={e => update("businessName", e.target.value)}
+                          required={tab === "signup"}
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  <Input
+                    type="email"
+                    placeholder="Email address"
+                    value={form.email}
+                    onChange={e => update("email", e.target.value)}
+                    required
+                    autoComplete="email"
+                  />
+
+                  <div className="relative">
+                    <Input
+                      type={showPass ? "text" : "password"}
+                      placeholder="Password"
+                      value={form.password}
+                      onChange={e => update("password", e.target.value)}
+                      required
+                      minLength={6}
+                      autoComplete={tab === "signin" ? "current-password" : "new-password"}
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      onClick={() => setShowPass(v => !v)}
+                      tabIndex={-1}
+                    >
+                      {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+
+                  {error && (
+                    <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-sm text-red-500 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                      {error}
+                    </motion.p>
+                  )}
+
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading ? (
+                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Please wait…</>
+                    ) : (
+                      <>{tab === "signin" ? "Sign In" : "Create Account"}<ArrowRight className="w-4 h-4 ml-2" /></>
+                    )}
+                  </Button>
+                </form>
+
+                {tab === "signup" && (
+                  <p className="text-xs text-center text-muted-foreground">
+                    By signing up you agree to our{" "}
+                    <a href="/terms" className="underline hover:text-primary">Terms of Service</a>{" "}
+                    and{" "}
+                    <a href="/privacy" className="underline hover:text-primary">Privacy Policy</a>.
+                  </p>
+                )}
+              </motion.div>
+            )}
+
+          </AnimatePresence>
         </div>
       </DialogContent>
     </Dialog>

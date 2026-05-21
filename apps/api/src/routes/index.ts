@@ -11,6 +11,7 @@ import servicesRouter from "./services";
 import waitlistRouter from "./waitlist";
 import uploadRouter from "./upload";
 import adminRouter from "./admin";
+import jengaPaymentsRouter from "./jenga-payments";
 import { apiLimiter, authLimiter, uploadLimiter } from "../middlewares/rateLimiter.js";
 
 const router: IRouter = Router();
@@ -31,5 +32,6 @@ router.use(servicesRouter);
 router.use(waitlistRouter);
 router.use(uploadRouter);
 router.use(adminRouter);
+router.use(jengaPaymentsRouter);
 
 export default router;

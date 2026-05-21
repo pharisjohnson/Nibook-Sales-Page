@@ -18,7 +18,7 @@ export default function TermsPage() {
     <div className="min-h-screen bg-background font-sans text-foreground">
       <Navbar />
 
-      <section className="pt-28 pb-14 bg-muted/30 border-b border-border">
+      <section className="pt-36 pb-28 bg-muted/30 border-b border-border">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
             <span className="inline-block text-xs font-semibold uppercase tracking-widest text-primary bg-primary/10 px-4 py-1.5 rounded-full mb-5">Legal</span>

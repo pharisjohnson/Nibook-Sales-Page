@@ -51,7 +51,7 @@ export default function FeedbackPage() {
     const bodyText = encodeURIComponent(
       `Name: ${name}\nProfession: ${role}\nRating: ${rating}/5\n\nReview:\n${body}`
     );
-    window.location.href = `mailto:hello@nibook.co?subject=${subject}&body=${bodyText}`;
+    window.location.href = `mailto:nibook@noonstudio.africa?subject=${subject}&body=${bodyText}`;
     setReviewState(s => ({ ...s, submitted: true }));
   }
 
@@ -62,7 +62,7 @@ export default function FeedbackPage() {
     const bodyText = encodeURIComponent(
       `Feature: ${title}\nCategory: ${category}\n\nDescription:\n${description}`
     );
-    window.location.href = `mailto:hello@nibook.co?subject=${subject}&body=${bodyText}`;
+    window.location.href = `mailto:nibook@noonstudio.africa?subject=${subject}&body=${bodyText}`;
     setFeatureState(s => ({ ...s, submitted: true }));
   }
 

@@ -9,7 +9,8 @@ type InsforgeUser = UserSchema;
 interface AuthContextType {
   user: InsforgeUser | null;
   loading: boolean;
-  signUp: (email: string, password: string, businessName: string) => Promise<{ error: string | null }>;
+  signUp: (email: string, password: string, businessName: string) => Promise<{ error: string | null; requiresVerification: boolean }>;
+  verifyEmail: (email: string, token: string) => Promise<{ error: string | null }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 }
@@ -45,21 +46,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password,
       name: businessName,
     });
-    if (error) return { error: (error as any).message ?? "Sign up failed" };
+    if (error) return { error: (error as any).message ?? "Sign up failed", requiresVerification: false };
 
-    if (data?.user) {
+    const raw = data as any;
+    const token = raw?.session?.access_token ?? raw?.access_token ?? null;
+    const requiresVerification = !token;
+
+    if (data?.user && token) {
+      // Session exists — email auto-confirmed, proceed immediately
       setUser(data.user);
-      const raw = data as any;
-      const token = raw?.session?.access_token ?? raw?.access_token ?? null;
-      if (token) setSession({ id: data.user.id, email: data.user.email ?? "" }, token);
+      setSession({ id: data.user.id, email: data.user.email ?? "" }, token);
       const slug = businessName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
       await insforge.database
         .from("profiles")
-        .insert({ id: data.user.id, business_name: businessName, slug });
+        .insert({ id: data.user.id, business_name: businessName, slug, plan: "trial" });
       identifyUser(data.user.id, data.user.email ?? "", businessName);
       track.signedUp();
     }
 
+    return { error: null, requiresVerification };
+  }
+
+  async function verifyEmail(email: string, token: string) {
+    const { data, error } = await (insforge.auth as any).verifyOtp({ email, token, type: "signup" });
+    if (error) return { error: (error as any).message ?? "Verification failed" };
+    if (data?.user) {
+      setUser(data.user);
+      const raw = data as any;
+      const sessionToken = raw?.session?.access_token ?? raw?.access_token ?? null;
+      if (sessionToken) setSession({ id: data.user.id, email: data.user.email ?? "" }, sessionToken);
+      // Profile may not exist yet if signup deferred it pending verification
+      try {
+        await insforge.database.from("profiles").insert({ id: data.user.id, plan: "trial" });
+      } catch (_) { /* row already exists — fine */ }
+      track.signedUp();
+    }
     return { error: null };
   }
 
@@ -85,7 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, signUp, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signUp, verifyEmail, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );

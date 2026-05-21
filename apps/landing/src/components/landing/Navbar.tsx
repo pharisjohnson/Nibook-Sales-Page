@@ -51,7 +51,7 @@ export function Navbar({ variant = "default" }: { variant?: "default" | "light" 
             <img
               src="/nibook-wordmark.png"
               alt="Nibook"
-              className={`h-16 w-auto group-hover:opacity-90 transition-opacity ${isLight ? "brightness-0 invert" : ""}`}
+              className={`h-32 w-auto group-hover:opacity-90 transition-opacity ${isLight ? "brightness-0 invert" : ""}`}
             />
           </Link>
 

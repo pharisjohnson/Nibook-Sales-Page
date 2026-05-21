@@ -65,7 +65,7 @@ export default function ReferralPage() {
       <Navbar variant="light" />
 
       {/* Hero */}
-      <section className="pt-28 pb-20 bg-primary text-white overflow-hidden relative">
+      <section className="pt-36 pb-28 bg-primary text-white overflow-hidden relative">
         <div className="absolute top-0 right-0 w-96 h-96 bg-white/5 rounded-full blur-3xl" />
         <div className="absolute bottom-0 left-0 w-80 h-80 bg-accent/10 rounded-full blur-3xl" />
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
@@ -253,7 +253,7 @@ export default function ReferralPage() {
               <li>Your referred friend must sign up using your unique referral link and activate a paid subscription.</li>
               <li>Referral rewards cannot be combined with other promotions or applied to the Premium plan.</li>
               <li>Nibook reserves the right to cancel referral rewards in cases of suspected fraud or abuse.</li>
-              <li>Contact <a href="mailto:hello@nibook.co" className="text-primary hover:underline">hello@nibook.co</a> to claim your discount once your referral has subscribed.</li>
+              <li>Contact <a href="mailto:nibook@noonstudio.africa" className="text-primary hover:underline">nibook@noonstudio.africa</a> to claim your discount once your referral has subscribed.</li>
             </ul>
           </div>
         </div>

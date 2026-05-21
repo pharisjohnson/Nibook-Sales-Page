@@ -18,6 +18,7 @@ import HelpPage from "@/pages/help";
 import ContactPage from "@/pages/contact";
 import ReviewsPage from "@/pages/reviews";
 import FeatureRequestsPage from "@/pages/feature-requests";
+import UpgradePage from "@/pages/upgrade";
 
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -49,12 +50,22 @@ const queryClient = new QueryClient({
   },
 });
 
+const TRIAL_DAYS = 7;
+
+function isTrialExpired(createdAt: string) {
+  const trialEndsAt = new Date(createdAt).getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000;
+  return Date.now() > trialEndsAt;
+}
+
 function ProtectedDashboard({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const { profile, loading: profileLoading } = useProfile();
   if (loading || profileLoading) return <PageLoader />;
   if (!user) return <Redirect to="/" />;
-  if (profile && !profile.onboarding_completed) return <Redirect to="/onboarding" />;
+  if (profile) {
+    const isPaid = profile.plan === "starter" || profile.plan === "premium";
+    if (!isPaid && isTrialExpired(profile.created_at)) return <Redirect to="/upgrade" />;
+  }
   return <DashboardLayout>{children}</DashboardLayout>;
 }
 
@@ -82,6 +93,7 @@ function Router() {
       <Route path="/contact" component={ContactPage} />
       <Route path="/reviews" component={ReviewsPage} />
       <Route path="/feature-requests" component={FeatureRequestsPage} />
+      <Route path="/upgrade" component={UpgradePage} />
       <Route path="/onboarding">
         <ProtectedOnboarding><OnboardingPage /></ProtectedOnboarding>
       </Route>

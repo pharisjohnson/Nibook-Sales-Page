@@ -13,7 +13,7 @@ export default function ContactPage() {
     e.preventDefault();
     const subject = encodeURIComponent(`[${form.topic}] ${form.name}`);
     const body = encodeURIComponent(`Name: ${form.name}\nEmail: ${form.email}\nTopic: ${form.topic}\n\nMessage:\n${form.message}`);
-    window.location.href = `mailto:hello@nibook.co?subject=${subject}&body=${body}`;
+    window.location.href = `mailto:nibook@noonstudio.africa?subject=${subject}&body=${body}`;
     setForm(s => ({ ...s, submitted: true }));
   }
 
@@ -21,7 +21,7 @@ export default function ContactPage() {
     <div className="min-h-screen bg-background font-sans text-foreground">
       <Navbar />
 
-      <section className="pt-28 pb-14 bg-muted/30 border-b border-border">
+      <section className="pt-36 pb-28 bg-muted/30 border-b border-border">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
             <span className="inline-block text-xs font-semibold uppercase tracking-widest text-primary bg-primary/10 px-4 py-1.5 rounded-full mb-5">Contact</span>
@@ -45,7 +45,7 @@ export default function ContactPage() {
                     </div>
                     <div>
                       <h3 className="font-semibold text-foreground mb-1">Email us</h3>
-                      <a href="mailto:hello@nibook.co" className="text-sm text-primary hover:underline">hello@nibook.co</a>
+                      <a href="mailto:nibook@noonstudio.africa" className="text-sm text-primary hover:underline">nibook@noonstudio.africa</a>
                       <p className="text-xs text-muted-foreground mt-1">For all general enquiries</p>
                     </div>
                   </div>
