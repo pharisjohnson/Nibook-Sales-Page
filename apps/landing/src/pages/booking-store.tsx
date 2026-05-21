@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link, useParams } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,9 +11,10 @@ import { apiFetch } from "@/lib/api";
 import {
   MapPin, Clock, Phone, MessageSquare, ChevronRight,
   Calendar, Scissors, Check, ArrowLeft, Share2, Heart, Loader2,
-  Smartphone, AlertCircle,
+  Smartphone, AlertCircle, CalendarOff,
 } from "lucide-react";
 
+// ─── Types ─────────────────────────────────────────────────────────────────────
 type Business = {
   id: string;
   slug: string;
@@ -34,7 +35,44 @@ type Service = {
   is_active: boolean;
 };
 
-const TIME_SLOTS = ["09:00","10:00","11:00","13:00","14:00","15:00","16:00"];
+type DaySchedule = {
+  day_name: string;
+  is_active: boolean;
+  start_time: string;
+  end_time: string;
+};
+
+type AvailabilityRules = {
+  buffer_minutes: number | null;
+  min_notice_hours: number | null;
+  max_advance_days: number | null;
+};
+
+type Booking = {
+  id: string;
+  scheduled_at: string;
+  duration_minutes: number | null;
+  status: string;
+};
+
+// ─── Helpers ───────────────────────────────────────────────────────────────────
+function parseTime12h(t: string): number {
+  const parts = t.trim().split(" ");
+  const [hStr, mStr] = parts[0].split(":");
+  const period = parts[1]?.toUpperCase() ?? "AM";
+  let h = parseInt(hStr, 10);
+  const m = parseInt(mStr ?? "0", 10);
+  if (period === "PM" && h !== 12) h += 12;
+  if (period === "AM" && h === 12) h = 0;
+  return h * 60 + m;
+}
+
+function minutesToHHMM(mins: number): string {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
 function to12h(t: string) {
   const [h, m] = t.split(":").map(Number);
   const suffix = h >= 12 ? "PM" : "AM";
@@ -45,6 +83,67 @@ function getInitials(name: string) {
   return name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
 }
 
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+function computeSlots(
+  schedule: DaySchedule[],
+  rules: AvailabilityRules | null,
+  bookedTimes: string[],
+  blackoutDates: string[],
+  selectedDate: string,
+  serviceDuration: number,
+): { slots: string[]; reason: string | null } {
+  const date = new Date(selectedDate + "T00:00:00");
+  const dayName = DAY_NAMES[date.getDay()];
+
+  // Check blackout
+  if (blackoutDates.includes(selectedDate)) {
+    return { slots: [], reason: "This date is unavailable (time off / holiday)." };
+  }
+
+  // Check max advance days
+  const maxDays = rules?.max_advance_days ?? 30;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((date.getTime() - today.getTime()) / 86400000);
+  if (diffDays > maxDays) {
+    return { slots: [], reason: `Bookings only open up to ${maxDays} days in advance.` };
+  }
+  if (diffDays < 0) {
+    return { slots: [], reason: "Cannot book a date in the past." };
+  }
+
+  // Find day schedule
+  const day = schedule.find(s => s.day_name === dayName);
+  if (!day?.is_active) {
+    return { slots: [], reason: `Not available on ${dayName}s.` };
+  }
+
+  const startMins = parseTime12h(day.start_time);
+  const endMins = parseTime12h(day.end_time);
+  const bufferMins = rules?.buffer_minutes ?? 15;
+  const minNoticeMins = (rules?.min_notice_hours ?? 1) * 60;
+  const step = serviceDuration + bufferMins;
+
+  const now = new Date();
+  const isToday = selectedDate === now.toISOString().split("T")[0];
+  const currentMins = isToday ? now.getHours() * 60 + now.getMinutes() + minNoticeMins : 0;
+
+  const slots: string[] = [];
+  for (let cursor = startMins; cursor + serviceDuration <= endMins; cursor += step) {
+    if (cursor < currentMins) continue;
+    const slotStr = minutesToHHMM(cursor);
+    if (!bookedTimes.includes(slotStr)) {
+      slots.push(slotStr);
+    }
+  }
+
+  return {
+    slots,
+    reason: slots.length === 0 ? "No available slots for this date — all slots are booked." : null,
+  };
+}
+
+// ─── Component ─────────────────────────────────────────────────────────────────
 export default function BookingStorePage() {
   const { toast } = useToast();
   const params = useParams<{ slug: string }>();
@@ -52,50 +151,95 @@ export default function BookingStorePage() {
 
   const [business, setBusiness] = useState<Business | null>(null);
   const [services, setServices] = useState<Service[]>([]);
+  const [schedule, setSchedule] = useState<DaySchedule[]>([]);
+  const [rules, setRules] = useState<AvailabilityRules | null>(null);
+  const [blackoutDates, setBlackoutDates] = useState<string[]>([]);
   const [pageLoading, setPageLoading] = useState(true);
   const [liked, setLiked] = useState(false);
 
+  // Booking dialog state
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [step, setStep] = useState<"pick-time" | "details" | "payment" | "confirm">("pick-time");
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
   const [selectedTime, setSelectedTime] = useState("");
+
+  // Slots
+  const [availableSlots, setAvailableSlots] = useState<string[]>([]);
+  const [slotsReason, setSlotsReason] = useState<string | null>(null);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+
+  // Client info
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
   const [payPhone, setPayPhone] = useState("");
-  const [paymentRef, setPaymentRef] = useState("");
   const [paymentState, setPaymentState] = useState<"idle" | "pending" | "polling" | "paid" | "failed">("idle");
   const [bookingId, setBookingId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // ── Load business + services + availability ─────────────────────────────────
   useEffect(() => {
     if (!slug) return;
-    Promise.all([
-      apiFetch<{ data: Business }>(`/profile/by-slug/${slug}`),
-      apiFetch<{ data: Service[] }>(`/services?owner_id=__lookup__`),
-    ]).then(async ([bizRes]) => {
+    (async () => {
+      const bizRes = await apiFetch<{ data: Business }>(`/profile/by-slug/${slug}`);
       const biz = bizRes.data?.data ?? null;
       setBusiness(biz);
       if (biz) {
-        const svcRes = await apiFetch<{ data: Service[] }>(`/services?owner_id=${biz.id}`);
+        const [svcRes, availRes] = await Promise.all([
+          apiFetch<{ data: Service[] }>(`/services?owner_id=${biz.id}`),
+          apiFetch<{ schedule: DaySchedule[]; blackouts: { date: string }[]; rules: AvailabilityRules | null }>(`/availability/${biz.id}`),
+        ]);
         setServices((svcRes.data?.data ?? []).filter(s => s.is_active));
+        setSchedule(availRes.data?.schedule ?? []);
+        setBlackoutDates((availRes.data?.blackouts ?? []).map(b => b.date));
+        setRules(availRes.data?.rules ?? null);
       }
       setPageLoading(false);
-    });
+    })();
   }, [slug]);
 
+  // ── Recompute slots when date or service changes ────────────────────────────
+  const recomputeSlots = useCallback(async (date: string, svc: Service | null) => {
+    if (!business || !svc || schedule.length === 0) return;
+    setLoadingSlots(true);
+    setSelectedTime("");
+
+    // Fetch existing bookings for this date
+    const d = new Date(date + "T00:00:00");
+    const next = new Date(d); next.setDate(d.getDate() + 1);
+    const { data: bookingsData } = await apiFetch<{ data: Booking[] }>(
+      `/bookings?owner_id=${business.id}&from=${d.toISOString()}&to=${next.toISOString()}&limit=200`,
+    );
+    const bookedTimes = (bookingsData?.data ?? [])
+      .filter(b => b.status !== "cancelled")
+      .map(b => {
+        const dt = new Date(b.scheduled_at);
+        return minutesToHHMM(dt.getHours() * 60 + dt.getMinutes());
+      });
+
+    const { slots, reason } = computeSlots(schedule, rules, bookedTimes, blackoutDates, date, svc.duration_minutes);
+    setAvailableSlots(slots);
+    setSlotsReason(reason);
+    setLoadingSlots(false);
+  }, [business, schedule, rules, blackoutDates]);
+
+  useEffect(() => {
+    if (selectedService) recomputeSlots(selectedDate, selectedService);
+  }, [selectedDate, selectedService, recomputeSlots]);
+
+  // ── Open booking dialog ─────────────────────────────────────────────────────
   const openBooking = (svc: Service) => {
     setSelectedService(svc);
     setStep("pick-time");
+    setSelectedDate(new Date().toISOString().split("T")[0]);
     setSelectedTime("");
     setClientName("");
     setClientPhone("");
     setPayPhone("");
-    setPaymentRef("");
     setPaymentState("idle");
     setBookingId(null);
   };
 
-  // Step: details → create booking, then move to payment
+  // ── Step: details → create booking ─────────────────────────────────────────
   const handleDetails = async () => {
     if (!clientName.trim() || !clientPhone.trim() || !business || !selectedService) return;
     setSubmitting(true);
@@ -123,7 +267,7 @@ export default function BookingStorePage() {
     setStep("payment");
   };
 
-  // Step: payment → STK push, then poll
+  // ── Step: payment → M-Pesa STK push ────────────────────────────────────────
   const handlePay = async () => {
     if (!payPhone.trim() || !bookingId || !selectedService || !business) return;
     setPaymentState("pending");
@@ -141,34 +285,36 @@ export default function BookingStorePage() {
       toast({ title: "Payment failed", description: error ?? "Could not initiate M-Pesa prompt", variant: "destructive" });
       return;
     }
-    setPaymentRef(data.reference);
+    const ref = data.reference;
     setPaymentState("polling");
-    // Poll every 4 seconds for up to 2 minutes
     let attempts = 0;
     const poll = setInterval(async () => {
       attempts++;
       if (attempts > 30) { clearInterval(poll); setPaymentState("failed"); return; }
-      const { data: statusData } = await apiFetch<{ status: string }>(`/jenga/collect/status/${data.reference}`);
+      const { data: statusData } = await apiFetch<{ status: string }>(`/jenga/collect/status/${ref}`);
       if (statusData?.status === "paid") {
-        clearInterval(poll);
-        setPaymentState("paid");
-        setStep("confirm");
+        clearInterval(poll); setPaymentState("paid"); setStep("confirm");
       } else if (statusData?.status === "failed") {
-        clearInterval(poll);
-        setPaymentState("failed");
-        toast({ title: "Payment not confirmed", description: "The M-Pesa prompt was declined or timed out.", variant: "destructive" });
+        clearInterval(poll); setPaymentState("failed");
+        toast({ title: "Payment not confirmed", description: "The prompt was declined or timed out.", variant: "destructive" });
       }
     }, 4000);
   };
 
   const handleDone = () => {
-    toast({
-      title: "Booking confirmed!",
-      description: `Your ${selectedService?.name} appointment is booked. We'll be in touch via WhatsApp.`,
-    });
+    toast({ title: "Booking confirmed!", description: `Your ${selectedService?.name} is booked. We'll be in touch shortly.` });
     setSelectedService(null);
   };
 
+  // ── Min date / max date for the date picker ─────────────────────────────────
+  const today = new Date().toISOString().split("T")[0];
+  const maxDate = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() + (rules?.max_advance_days ?? 30));
+    return d.toISOString().split("T")[0];
+  })();
+
+  // ─────────────────────────────────────────────────────────────────────────────
   if (pageLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -303,7 +449,7 @@ export default function BookingStorePage() {
         </div>
       </div>
 
-      {/* Booking dialog */}
+      {/* ─── Booking dialog ─────────────────────────────────────────────────────── */}
       <Dialog open={!!selectedService} onOpenChange={open => { if (!open) setSelectedService(null); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -311,9 +457,9 @@ export default function BookingStorePage() {
               {step === "confirm" ? "Booking Confirmed!" : `Book: ${selectedService?.name}`}
             </DialogTitle>
             <DialogDescription>
-              {step === "pick-time" && "Choose a date and time."}
-              {step === "details" && "Enter your details to complete the booking."}
-              {step === "payment" && "Pay securely via M-Pesa to confirm your slot."}
+              {step === "pick-time" && "Choose a date and available time slot."}
+              {step === "details" && "Enter your contact details to continue."}
+              {step === "payment" && "Pay via M-Pesa to confirm your appointment."}
               {step === "confirm" && "Payment received — you're all set!"}
             </DialogDescription>
           </DialogHeader>
@@ -326,11 +472,11 @@ export default function BookingStorePage() {
               </div>
               <div className="space-y-1">
                 <p className="font-semibold">{selectedService?.name}</p>
-                <p className="text-sm text-muted-foreground">{to12h(selectedTime)} · {business.business_name}</p>
+                <p className="text-sm text-muted-foreground">{to12h(selectedTime)} · {selectedDate} · {business.business_name}</p>
                 <p className="text-sm font-bold text-green-600">KES {selectedService?.price.toLocaleString()} paid</p>
               </div>
-              <div className="p-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-700">
-                <MessageSquare className="w-4 h-4 inline mr-1.5" />
+              <div className="p-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-700 flex items-center gap-2">
+                <MessageSquare className="w-4 h-4 shrink-0" />
                 Confirmation will be sent to {clientPhone}
               </div>
               <Button className="w-full" onClick={handleDone}>Done</Button>
@@ -340,40 +486,69 @@ export default function BookingStorePage() {
           {/* ── Pick time ── */}
           {step === "pick-time" && (
             <div className="space-y-4">
+              {/* Date */}
               <div className="space-y-2">
-                <Label>Date</Label>
+                <Label className="flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5" />Date
+                </Label>
                 <Input
                   type="date"
                   value={selectedDate}
-                  min={new Date().toISOString().split("T")[0]}
+                  min={today}
+                  max={maxDate}
                   onChange={e => setSelectedDate(e.target.value)}
                 />
               </div>
+
+              {/* Time slots */}
               <div>
-                <p className="text-sm font-medium mb-2">Available times</p>
-                <div className="grid grid-cols-3 gap-2">
-                  {TIME_SLOTS.map(t => (
-                    <button
-                      key={t}
-                      onClick={() => setSelectedTime(t)}
-                      className={`py-2 px-3 rounded-lg text-sm font-medium border transition-all ${
-                        selectedTime === t ? "bg-primary text-white border-primary" : "bg-white border-border hover:border-primary/50"
-                      }`}
-                    >
-                      {to12h(t)}
-                    </button>
-                  ))}
-                </div>
+                <p className="text-sm font-medium mb-2 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5" />Available times
+                  {loadingSlots && <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground ml-1" />}
+                </p>
+
+                {!loadingSlots && slotsReason && (
+                  <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
+                    <CalendarOff className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
+                    {slotsReason}
+                  </div>
+                )}
+
+                {!loadingSlots && !slotsReason && availableSlots.length === 0 && (
+                  <p className="text-xs text-muted-foreground py-2">Loading availability…</p>
+                )}
+
+                {!loadingSlots && availableSlots.length > 0 && (
+                  <div className="grid grid-cols-3 gap-2">
+                    {availableSlots.map(t => (
+                      <button
+                        key={t}
+                        onClick={() => setSelectedTime(t)}
+                        className={`py-2 px-3 rounded-lg text-sm font-medium border transition-all ${
+                          selectedTime === t
+                            ? "bg-primary text-white border-primary shadow-sm"
+                            : "bg-white border-border hover:border-primary/50 hover:bg-primary/5"
+                        }`}
+                      >
+                        {to12h(t)}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-              <Button className="w-full" disabled={!selectedTime} onClick={() => setStep("details")}>Continue</Button>
+
+              <Button className="w-full" disabled={!selectedTime || loadingSlots} onClick={() => setStep("details")}>
+                Continue
+              </Button>
             </div>
           )}
 
           {/* ── Details ── */}
           {step === "details" && (
             <div className="space-y-4">
-              <div className="p-3 bg-muted/40 rounded-xl text-sm">
-                <span className="font-medium">{selectedService?.name}</span> · {to12h(selectedTime)}
+              <div className="p-3 bg-muted/40 rounded-xl text-sm flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-muted-foreground shrink-0" />
+                <span><span className="font-medium">{selectedService?.name}</span> · {to12h(selectedTime)} · {selectedDate}</span>
               </div>
               <div className="space-y-3">
                 <div className="space-y-1.5">
@@ -393,7 +568,7 @@ export default function BookingStorePage() {
                   onClick={handleDetails}
                 >
                   {submitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                  Next
+                  {submitting ? "Booking…" : "Next"}
                 </Button>
               </div>
             </div>
@@ -402,7 +577,6 @@ export default function BookingStorePage() {
           {/* ── Payment ── */}
           {step === "payment" && (
             <div className="space-y-4">
-              {/* Summary */}
               <div className="p-4 bg-muted/40 rounded-xl space-y-1">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">{selectedService?.name}</span>
@@ -414,7 +588,6 @@ export default function BookingStorePage() {
                 </div>
               </div>
 
-              {/* M-Pesa input */}
               <div className="space-y-1.5">
                 <Label className="flex items-center gap-1.5">
                   <Smartphone className="w-3.5 h-3.5 text-green-600" />
@@ -428,7 +601,6 @@ export default function BookingStorePage() {
                 />
               </div>
 
-              {/* States */}
               {(paymentState === "pending" || paymentState === "polling") && (
                 <div className="p-4 bg-green-50 border border-green-200 rounded-xl text-sm text-green-800 flex items-start gap-3">
                   <Loader2 className="w-4 h-4 animate-spin shrink-0 mt-0.5" />
@@ -442,7 +614,7 @@ export default function BookingStorePage() {
               {paymentState === "failed" && (
                 <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 shrink-0" />
-                  Payment was not confirmed. Check your number and try again.
+                  Payment not confirmed. Check your number and try again.
                 </div>
               )}
 
@@ -467,9 +639,7 @@ export default function BookingStorePage() {
                 </Button>
               </div>
 
-              <p className="text-xs text-center text-muted-foreground">
-                Powered by Jenga · Secured by M-Pesa
-              </p>
+              <p className="text-xs text-center text-muted-foreground">Powered by Jenga · Secured by M-Pesa</p>
             </div>
           )}
         </DialogContent>

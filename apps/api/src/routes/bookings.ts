@@ -5,7 +5,7 @@ import { syncBookingToCalendar } from "./integrations.js";
 const router: IRouter = Router();
 
 router.get("/bookings", async (req: Request, res: Response) => {
-  const { owner_id, status, limit = "100", offset = "0" } = req.query as Record<string, string>;
+  const { owner_id, status, limit = "100", offset = "0", from, to } = req.query as Record<string, string>;
   if (!owner_id) { res.status(400).json({ error: "owner_id required" }); return; }
   try {
     const db = getInsforgeAdmin();
@@ -16,6 +16,8 @@ router.get("/bookings", async (req: Request, res: Response) => {
       .order("scheduled_at", { ascending: false })
       .range(Number(offset), Number(offset) + Number(limit) - 1);
     if (status) q = q.eq("status", status);
+    if (from) q = q.gte("scheduled_at", from);
+    if (to) q = q.lt("scheduled_at", to);
     const { data, error } = await q;
     if (error) { res.status(500).json({ error: error.message }); return; }
     res.json({ data });
