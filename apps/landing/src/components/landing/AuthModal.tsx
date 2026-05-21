@@ -18,7 +18,7 @@ interface AuthModalProps {
 type ModalStep = "form" | "verify";
 
 export function AuthModal({ open, onClose, defaultTab = "signin" }: AuthModalProps) {
-  const { signIn, signUp, verifyEmail } = useAuth();
+  const { signIn, signUp, verifyEmail, resendVerification } = useAuth();
   const [, navigate] = useLocation();
   const [tab, setTab] = useState<"signin" | "signup">(defaultTab);
   const [step, setStep] = useState<ModalStep>("form");
@@ -90,8 +90,8 @@ export function AuthModal({ open, onClose, defaultTab = "signin" }: AuthModalPro
 
   async function handleResend() {
     setError("");
-    // Re-trigger signup which will resend the verification email
-    await signUp(form.email, form.password, form.businessName);
+    const { error: err } = await resendVerification(pendingEmail);
+    if (err) setError(err);
     setOtp("");
   }
 

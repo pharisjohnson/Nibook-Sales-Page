@@ -10,7 +10,8 @@ interface AuthContextType {
   user: InsforgeUser | null;
   loading: boolean;
   signUp: (email: string, password: string, businessName: string) => Promise<{ error: string | null; requiresVerification: boolean }>;
-  verifyEmail: (email: string, token: string) => Promise<{ error: string | null }>;
+  verifyEmail: (email: string, otp: string) => Promise<{ error: string | null }>;
+  resendVerification: (email: string) => Promise<{ error: string | null }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 }
@@ -67,20 +68,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null, requiresVerification };
   }
 
-  async function verifyEmail(email: string, token: string) {
-    const { data, error } = await (insforge.auth as any).verifyOtp({ email, token, type: "signup" });
+  async function verifyEmail(email: string, otp: string) {
+    const { data, error } = await insforge.auth.verifyEmail({ email, otp });
     if (error) return { error: (error as any).message ?? "Verification failed" };
     if (data?.user) {
       setUser(data.user);
-      const raw = data as any;
-      const sessionToken = raw?.session?.access_token ?? raw?.access_token ?? null;
+      const sessionToken = data.accessToken ?? null;
       if (sessionToken) setSession({ id: data.user.id, email: data.user.email ?? "" }, sessionToken);
-      // Profile may not exist yet if signup deferred it pending verification
       try {
         await insforge.database.from("profiles").insert({ id: data.user.id, plan: "trial" });
       } catch (_) { /* row already exists — fine */ }
       track.signedUp();
     }
+    return { error: null };
+  }
+
+  async function resendVerification(email: string) {
+    const { error } = await insforge.auth.resendVerificationEmail({ email });
+    if (error) return { error: (error as any).message ?? "Failed to resend code" };
     return { error: null };
   }
 
@@ -106,7 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, signUp, verifyEmail, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signUp, verifyEmail, resendVerification, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );
