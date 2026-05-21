@@ -13,6 +13,7 @@ import uploadRouter from "./upload";
 import adminRouter from "./admin";
 import jengaPaymentsRouter from "./jenga-payments";
 import integrationsRouter from "./integrations";
+import mcpRouter from "./mcp";
 import { apiLimiter, authLimiter, uploadLimiter } from "../middlewares/rateLimiter.js";
 
 const router: IRouter = Router();
@@ -35,5 +36,6 @@ router.use(uploadRouter);
 router.use(adminRouter);
 router.use(jengaPaymentsRouter);
 router.use(integrationsRouter);
+router.use(mcpRouter);
 
 export default router;

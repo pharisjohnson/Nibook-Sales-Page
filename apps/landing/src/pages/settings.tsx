@@ -16,6 +16,7 @@ import {
   Check, Phone, Building2, Smartphone, Wallet, ExternalLink,
   Code2, FileText, Copy, Eye, EyeOff, Camera, ImagePlus, Trash2,
   Share2, QrCode, Instagram, Facebook, Globe, Clock, AlertCircle,
+  Bot, Lock, RefreshCw, Terminal,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
@@ -72,6 +73,9 @@ export default function SettingsPage() {
   const [showQr, setShowQr] = useState(false);
   const [gcalConnecting, setGcalConnecting] = useState(false);
   const [gcalDisconnecting, setGcalDisconnecting] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [generatingKey, setGeneratingKey] = useState(false);
+  const [mcpConfigTab, setMcpConfigTab] = useState<"web" | "desktop" | "code">("web");
 
   useEffect(() => {
     if (profile) {
@@ -165,6 +169,27 @@ export default function SettingsPage() {
       toast({ title: "Failed to disconnect", variant: "destructive" });
     } finally {
       setGcalDisconnecting(false);
+    }
+  }
+
+  async function generateApiKey() {
+    if (!user) return;
+    setGeneratingKey(true);
+    try {
+      const res = await fetch("/api/mcp/generate-key", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: user.id }),
+      });
+      const json = await res.json() as { api_key?: string; error?: string };
+      if (!json.api_key) throw new Error(json.error ?? "Failed to generate key");
+      refreshProfile();
+      setShowApiKey(true);
+      toast({ title: "API key generated", description: "Copy it now — it won't be shown again after you leave." });
+    } catch (err) {
+      toast({ title: "Failed to generate key", description: String(err), variant: "destructive" });
+    } finally {
+      setGeneratingKey(false);
     }
   }
 
@@ -938,6 +963,207 @@ export default function SettingsPage() {
                 <p>To enable Google Calendar, add <code className="font-mono">GOOGLE_CLIENT_ID</code>, <code className="font-mono">GOOGLE_CLIENT_SECRET</code>, and <code className="font-mono">APP_URL</code> to your Vercel environment variables, then redeploy.</p>
               </div>
             )}
+
+            {/* Claude AI / MCP */}
+            {(() => {
+              const isPaying = profile?.plan === "starter" || profile?.plan === "premium";
+              const MCP_URL = "https://nibook.noonstudio.africa/api/mcp";
+              const ownerIdConfig = `{
+  "mcpServers": {
+    "nibook": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["apps/mcp/dist/index.mjs"],
+      "env": {
+        "NIBOOK_API_URL": "https://nibook.noonstudio.africa/api",
+        "NIBOOK_OWNER_ID": "${user?.id ?? "your-user-id"}"
+      }
+    }
+  }
+}`;
+              const desktopConfig = `{
+  "mcpServers": {
+    "nibook": {
+      "command": "node",
+      "args": ["/absolute/path/to/apps/mcp/dist/index.mjs"],
+      "env": {
+        "NIBOOK_API_URL": "https://nibook.noonstudio.africa/api",
+        "NIBOOK_OWNER_ID": "${user?.id ?? "your-user-id"}"
+      }
+    }
+  }
+}`;
+              const remoteConfig = profile?.api_key
+                ? `{
+  "mcpServers": {
+    "nibook": {
+      "type": "http",
+      "url": "${MCP_URL}",
+      "headers": {
+        "Authorization": "Bearer ${showApiKey ? profile.api_key : "nk_••••••••••••••••••••"}"
+      }
+    }
+  }
+}`
+                : null;
+
+              return (
+                <Card className="shadow-sm relative overflow-hidden">
+                  {!isPaying && (
+                    <div className="absolute inset-0 z-10 bg-background/80 backdrop-blur-sm flex flex-col items-center justify-center gap-3 rounded-xl">
+                      <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center">
+                        <Lock className="w-5 h-5 text-amber-600" />
+                      </div>
+                      <div className="text-center px-6">
+                        <p className="font-semibold text-sm">Starter or Premium plan required</p>
+                        <p className="text-xs text-muted-foreground mt-1">Upgrade to connect Claude AI to your Nibook business.</p>
+                      </div>
+                      <Button size="sm" className="gap-1.5" onClick={() => window.location.href = "/billing"}>
+                        Upgrade plan
+                      </Button>
+                    </div>
+                  )}
+                  <CardContent className="p-5 space-y-4">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-xl shrink-0 bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center">
+                        <Bot className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold">Claude AI (MCP)</p>
+                        <p className="text-sm text-muted-foreground">Let Claude manage bookings, clients, and analytics — directly from your AI chat.</p>
+                      </div>
+                      {isPaying && (
+                        <Badge variant="outline" className="bg-violet-50 text-violet-700 border-violet-200 shrink-0">
+                          Active
+                        </Badge>
+                      )}
+                    </div>
+
+                    {isPaying && (
+                      <>
+                        {/* API Key section */}
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs">API Key</Label>
+                            <button
+                              onClick={generateApiKey}
+                              disabled={generatingKey}
+                              className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 disabled:opacity-50"
+                            >
+                              {generatingKey ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                              {profile?.api_key ? "Regenerate" : "Generate key"}
+                            </button>
+                          </div>
+                          {profile?.api_key ? (
+                            <div className="flex items-center gap-2 p-2.5 bg-muted/50 rounded-lg border font-mono text-xs">
+                              <span className="flex-1 truncate">
+                                {showApiKey ? profile.api_key : `nk_${"•".repeat(32)}`}
+                              </span>
+                              <button onClick={() => setShowApiKey(v => !v)} className="shrink-0 text-muted-foreground hover:text-foreground">
+                                {showApiKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                              </button>
+                              <button onClick={() => copyText(profile.api_key!, "api-key")} className="shrink-0 text-primary hover:text-primary/80">
+                                {copiedKey === "api-key" ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="p-3 border border-dashed rounded-lg text-xs text-muted-foreground text-center">
+                              Generate a key to use the remote HTTP endpoint (claude.ai web)
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Config tabs */}
+                        <div className="space-y-2">
+                          <Label className="text-xs">Setup guide</Label>
+                          <div className="flex items-center gap-1 bg-muted rounded-lg p-1 w-fit">
+                            {([["web", "claude.ai"], ["desktop", "Claude Desktop"], ["code", "claude.ai/code"]] as const).map(([key, label]) => (
+                              <button
+                                key={key}
+                                onClick={() => setMcpConfigTab(key)}
+                                className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${mcpConfigTab === key ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+
+                          {mcpConfigTab === "web" && (
+                            <div className="space-y-2">
+                              {remoteConfig ? (
+                                <>
+                                  <p className="text-xs text-muted-foreground">Add to your project's <code className="font-mono bg-muted px-1 rounded">.mcp.json</code> or claude.ai remote MCP settings:</p>
+                                  <div className="relative">
+                                    <pre className="bg-slate-900 text-green-400 rounded-xl p-4 pr-16 text-xs overflow-x-auto font-mono whitespace-pre leading-relaxed">{remoteConfig}</pre>
+                                    <button
+                                      onClick={() => copyText(remoteConfig, "mcp-web")}
+                                      className="absolute top-2.5 right-2.5 flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white text-xs px-2.5 py-1.5 rounded-lg"
+                                    >
+                                      {copiedKey === "mcp-web" ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                                      {copiedKey === "mcp-web" ? "Copied!" : "Copy"}
+                                    </button>
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+                                  Generate an API key above first, then this snippet will appear with it pre-filled.
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {mcpConfigTab === "desktop" && (
+                            <div className="space-y-2">
+                              <p className="text-xs text-muted-foreground">
+                                1. Build the server: <code className="font-mono bg-muted px-1 rounded">cd apps/mcp && pnpm run build</code><br />
+                                2. Add to <code className="font-mono bg-muted px-1 rounded">%APPDATA%\Claude\claude_desktop_config.json</code> (Windows) or <code className="font-mono bg-muted px-1 rounded">~/Library/Application Support/Claude/claude_desktop_config.json</code> (Mac):
+                              </p>
+                              <div className="relative">
+                                <pre className="bg-slate-900 text-green-400 rounded-xl p-4 pr-16 text-xs overflow-x-auto font-mono whitespace-pre leading-relaxed">{desktopConfig}</pre>
+                                <button
+                                  onClick={() => copyText(desktopConfig, "mcp-desktop")}
+                                  className="absolute top-2.5 right-2.5 flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white text-xs px-2.5 py-1.5 rounded-lg"
+                                >
+                                  {copiedKey === "mcp-desktop" ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                                  {copiedKey === "mcp-desktop" ? "Copied!" : "Copy"}
+                                </button>
+                              </div>
+                              <p className="text-xs text-muted-foreground">Replace <code className="font-mono bg-muted px-1 rounded">/absolute/path/to/</code> with the actual path to this project on your computer.</p>
+                            </div>
+                          )}
+
+                          {mcpConfigTab === "code" && (
+                            <div className="space-y-2">
+                              <p className="text-xs text-muted-foreground">Add to <code className="font-mono bg-muted px-1 rounded">.mcp.json</code> at the root of this project (after running <code className="font-mono bg-muted px-1 rounded">pnpm run build</code> inside <code className="font-mono bg-muted px-1 rounded">apps/mcp</code>):</p>
+                              <div className="relative">
+                                <pre className="bg-slate-900 text-green-400 rounded-xl p-4 pr-16 text-xs overflow-x-auto font-mono whitespace-pre leading-relaxed">{ownerIdConfig}</pre>
+                                <button
+                                  onClick={() => copyText(ownerIdConfig, "mcp-code")}
+                                  className="absolute top-2.5 right-2.5 flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white text-xs px-2.5 py-1.5 rounded-lg"
+                                >
+                                  {copiedKey === "mcp-code" ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                                  {copiedKey === "mcp-code" ? "Copied!" : "Copy"}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* What Claude can do */}
+                        <div className="p-3 bg-violet-50 border border-violet-200 rounded-xl text-xs text-violet-800 space-y-1">
+                          <p className="font-medium text-sm">What Claude can do with this</p>
+                          <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 mt-1">
+                            {["List & create bookings", "Update booking status", "Manage services & pricing", "View revenue analytics", "List top clients", "Get business profile"].map(f => (
+                              <p key={f} className="flex items-center gap-1"><Check className="w-3 h-3 text-violet-600 shrink-0" />{f}</p>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })()}
 
             {/* Webhook / API */}
             <Card className="shadow-sm">
