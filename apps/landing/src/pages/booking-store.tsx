@@ -199,9 +199,16 @@ export default function BookingStorePage() {
 
   // ── Recompute slots when date or service changes ────────────────────────────
   const recomputeSlots = useCallback(async (date: string, svc: Service | null) => {
-    if (!business || !svc || schedule.length === 0) return;
+    if (!business || !svc) return;
     setLoadingSlots(true);
     setSelectedTime("");
+
+    if (schedule.length === 0) {
+      setAvailableSlots([]);
+      setSlotsReason("This business hasn't configured their availability yet. Contact them to book.");
+      setLoadingSlots(false);
+      return;
+    }
 
     // Fetch existing bookings for this date
     const d = new Date(date + "T00:00:00");

@@ -46,7 +46,11 @@ router.get("/profile/by-slug/:slug", async (req: Request, res: Response) => {
   const { slug } = req.params;
   try {
     const db = getInsforgeAdmin();
-    const { data, error } = await db.database.from("profiles").select("*").eq("slug", slug).single();
+    const { data, error } = await db.database
+      .from("profiles")
+      .select("id, slug, business_name, category, location, phone, bio, logo_url, cover_url, avatar_url, plan, booking_widget_theme, cancellation_policy, whatsapp_enabled, whatsapp_phone, mpesa_paybill, mpesa_account")
+      .eq("slug", slug)
+      .single();
     if (error) { res.status(404).json({ error: "Business not found" }); return; }
     res.json({ data });
   } catch (err) {

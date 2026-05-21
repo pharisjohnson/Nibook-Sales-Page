@@ -15,8 +15,8 @@ import {
   Palette, MessageSquare, Link2, CreditCard, HelpCircle, Save,
   Check, Phone, Building2, Smartphone, Wallet, ExternalLink,
   Code2, FileText, Copy, Eye, EyeOff, Camera, ImagePlus, Trash2,
-  Share2, QrCode, Instagram, Facebook, Globe, Clock, AlertCircle,
-  Bot, Lock, RefreshCw, Terminal,
+  Share2, QrCode, Instagram, Facebook, Globe, AlertCircle,
+  Bot, Lock, RefreshCw,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
@@ -185,7 +185,7 @@ export default function SettingsPage() {
       if (!json.api_key) throw new Error(json.error ?? "Failed to generate key");
       refreshProfile();
       setShowApiKey(true);
-      toast({ title: "API key generated", description: "Copy it now — it won't be shown again after you leave." });
+      toast({ title: "API key generated", description: "Use the eye icon to reveal it any time." });
     } catch (err) {
       toast({ title: "Failed to generate key", description: String(err), variant: "destructive" });
     } finally {
