@@ -40,7 +40,7 @@ export async function jengaPost<T = unknown>(
   signatureFields: string,
 ): Promise<{ ok: boolean; status: number; data: T }> {
   const signature = signData(signatureFields);
-  const res = await fetch(`${JENGA_BASE}${path}`, {
+  const res: any = await fetch(`${JENGA_BASE}${path}`, {
     method: "POST",
     headers: baseHeaders(signature),
     body: JSON.stringify(body),
@@ -54,7 +54,7 @@ export async function jengaGet<T = unknown>(
   signatureFields: string,
 ): Promise<{ ok: boolean; status: number; data: T }> {
   const signature = signData(signatureFields);
-  const res = await fetch(`${JENGA_BASE}${path}`, {
+  const res: any = await fetch(`${JENGA_BASE}${path}`, {
     method: "GET",
     headers: baseHeaders(signature),
   });

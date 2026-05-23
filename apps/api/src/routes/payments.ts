@@ -80,7 +80,7 @@ router.post("/payments/initiate", async (req: Request, res: Response) => {
   });
 
   try {
-    const payheroRes = await fetch(`${PAYHERO_BASE}/payments`, {
+    const payheroRes: any = await fetch(`${PAYHERO_BASE}/payments`, {
       method: "POST",
       headers: payheroHeaders(),
       body: JSON.stringify({
@@ -128,7 +128,7 @@ router.get("/payments/status/:reference", async (req: Request, res: Response) =>
   }
 
   try {
-    const payheroRes = await fetch(
+    const payheroRes: any = await fetch(
       `${PAYHERO_BASE}/transaction-status?reference=${encodeURIComponent(String(reference))}`,
       { headers: payheroHeaders() },
     );

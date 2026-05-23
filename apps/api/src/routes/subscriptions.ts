@@ -40,7 +40,7 @@ router.post("/subscriptions/initialize", async (req: Request, res: Response) => 
   const callbackUrl = `${appUrl}/subscription/callback`;
 
   try {
-    const paystackRes = await fetch(`${PAYSTACK_BASE}/transaction/initialize`, {
+    const paystackRes: any = await fetch(`${PAYSTACK_BASE}/transaction/initialize`, {
       method: "POST",
       headers: paystackHeaders(),
       body: JSON.stringify({
@@ -107,7 +107,7 @@ router.get("/subscriptions/verify/:reference", async (req: Request, res: Respons
   }
 
   try {
-    const paystackRes = await fetch(
+    const paystackRes: any = await fetch(
       `${PAYSTACK_BASE}/transaction/verify/${encodeURIComponent(String(reference))}`,
       { headers: paystackHeaders() },
     );
