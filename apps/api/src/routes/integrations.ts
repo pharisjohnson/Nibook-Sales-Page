@@ -53,7 +53,7 @@ router.get("/integrations/google/callback", async (req: Request, res: Response) 
     client.setCredentials(tokens);
 
     // Get the connected Google account email
-    const oauth2 = google.oauth2({ version: "v2", auth: client }) as any;
+    const oauth2 = google.oauth2({ version: "v2", auth: client } as any) as any;
     const { data: googleUser } = await oauth2.userinfo.get();
 
     const db = getInsforgeAdmin();
@@ -117,7 +117,7 @@ export async function syncBookingToCalendar(booking: {
     access_token: profile.google_access_token ?? undefined,
   });
 
-  const calendar = google.calendar({ version: "v3", auth: client }) as any;
+  const calendar = google.calendar({ version: "v3", auth: client } as any) as any;
   const start = new Date(booking.scheduled_at);
   const end = new Date(start.getTime() + (booking.duration_minutes ?? 60) * 60_000);
 
