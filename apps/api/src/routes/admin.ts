@@ -106,4 +106,38 @@ router.get("/admin/churned", async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/admin/cleanup-expired-trials
+// Deletes profiles where plan='trial' and created_at is 8+ days ago.
+// Called daily by a cron schedule. Protected by ADMIN_SECRET_KEY.
+router.post("/admin/cleanup-expired-trials", async (_req: Request, res: Response) => {
+  const eightDaysAgo = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
+  try {
+    const db = getInsforgeAdmin();
+    const { data: expired } = await db.database
+      .from("profiles")
+      .select("id, business_name, created_at")
+      .eq("plan", "trial")
+      .lt("created_at", eightDaysAgo);
+
+    const ids = (expired ?? []).map((r: any) => r.id);
+    if (ids.length === 0) {
+      res.json({ deleted: 0, message: "No expired trials to clean up" });
+      return;
+    }
+
+    // Delete services owned by these profiles
+    await db.database.from("services").delete().in("owner_id", ids);
+
+    // Delete profiles (cascades to bookings, availability, team, etc.)
+    await db.database.from("profiles").delete().in("id", ids);
+
+    res.json({
+      deleted: ids.length,
+      profiles: (expired ?? []).map((r: any) => ({ id: r.id, name: r.business_name, created_at: r.created_at })),
+    });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 export default router;

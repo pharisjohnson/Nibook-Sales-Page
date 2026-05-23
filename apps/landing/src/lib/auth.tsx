@@ -10,7 +10,7 @@ interface AuthContextType {
   user: InsforgeUser | null;
   loading: boolean;
   signUp: (email: string, password: string, businessName: string) => Promise<{ error: string | null; requiresVerification: boolean }>;
-  verifyEmail: (email: string, otp: string) => Promise<{ error: string | null }>;
+  verifyEmail: (email: string, otp: string, businessName?: string) => Promise<{ error: string | null }>;
   resendVerification: (email: string) => Promise<{ error: string | null }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
@@ -54,21 +54,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const requiresVerification = !token;
 
     if (data?.user && token) {
-      // Session exists — email auto-confirmed, proceed immediately
       setUser(data.user);
       setSession({ id: data.user.id, email: data.user.email ?? "" }, token);
-      const slug = businessName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-      await insforge.database
-        .from("profiles")
-        .insert({ id: data.user.id, business_name: businessName, slug, plan: "trial" });
-      identifyUser(data.user.id, data.user.email ?? "", businessName);
+      const name = businessName.trim();
+      const slug = name ? name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") : undefined;
+      try {
+        await insforge.database.from("profiles").upsert(
+          {
+            id: data.user.id,
+            ...(name ? { business_name: name, slug } : {}),
+            plan: "trial",
+          },
+          { onConflict: "id" },
+        );
+      } catch (_) { /* row may already exist from a trigger */ }
+      identifyUser(data.user.id, data.user.email ?? "", name);
       track.signedUp();
     }
 
     return { error: null, requiresVerification };
   }
 
-  async function verifyEmail(email: string, otp: string) {
+  async function verifyEmail(email: string, otp: string, businessName?: string) {
     const { data, error } = await insforge.auth.verifyEmail({ email, otp });
     if (error) return { error: (error as any).message ?? "Verification failed" };
     if (data?.user) {
@@ -80,9 +87,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         insforge.setAccessToken(sessionToken);
       }
       try {
-        // Create the profile row if the DB trigger didn't fire; plan defaults to 'starter' in schema
-        await insforge.database.from("profiles").insert({ id: data.user.id });
-      } catch (_) { /* row already exists or RLS will let the onboarding PATCH create it */ }
+        await insforge.database.from("profiles").upsert(
+          {
+            id: data.user.id,
+            ...(businessName ? { business_name: businessName } : {}),
+          },
+          { onConflict: "id" },
+        );
+      } catch (_) { /* row already exists */ }
       track.signedUp();
     }
     return { error: null };

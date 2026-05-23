@@ -18,7 +18,7 @@ create table if not exists public.profiles (
   cover_url text,
   avatar_url text,
   onboarding_completed boolean default false,
-  plan text default 'starter' check (plan in ('starter', 'premium', 'enterprise')),
+  plan text default 'trial' check (plan in ('trial', 'starter', 'premium')),
   plan_expires_at timestamptz,
   mpesa_paybill text,
   mpesa_account text,

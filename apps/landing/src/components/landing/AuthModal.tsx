@@ -55,7 +55,7 @@ export function AuthModal({ open, onClose, defaultTab = "signin" }: AuthModalPro
         handleClose();
         navigate("/dashboard");
       } else {
-        if (!form.businessName.trim()) { setError("Business name is required"); return; }
+        // business name is optional — can be set during onboarding
         const { error: err, requiresVerification } = await signUp(form.email, form.password, form.businessName);
         if (err) { setError(err); return; }
         if (requiresVerification) {
@@ -79,7 +79,7 @@ export function AuthModal({ open, onClose, defaultTab = "signin" }: AuthModalPro
     setLoading(true);
     setError("");
     try {
-      const { error: err } = await verifyEmail(pendingEmail, otp.trim());
+      const { error: err } = await verifyEmail(pendingEmail, otp.trim(), form.businessName);
       if (err) { setError(err); return; }
       handleClose();
       navigate("/onboarding");
