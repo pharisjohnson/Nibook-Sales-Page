@@ -1,7 +1,7 @@
-import { Router, type IRouter, type Request, type Response } from "express";
+import { Router, type Request, type Response } from "express";
 import { getInsforgeAdmin } from "../lib/insforge.js";
 
-const router: IRouter = Router();
+const router = Router();
 
 router.get("/services", async (req: Request, res: Response) => {
   const { owner_id } = req.query as Record<string, string>;

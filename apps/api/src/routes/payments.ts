@@ -1,7 +1,7 @@
-import { Router, type IRouter, type Request, type Response } from "express";
+import { Router, type Request, type Response } from "express";
 import { getInsforgeAdmin } from "../lib/insforge.js";
 
-const router: IRouter = Router();
+const router = Router();
 
 const PAYHERO_BASE = "https://backend.payhero.co.ke/api/v2";
 const CHANNEL_ID = Number(process.env.PAYHERO_CHANNEL_ID ?? "0");

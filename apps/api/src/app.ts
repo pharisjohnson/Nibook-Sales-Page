@@ -1,4 +1,4 @@
-import express, { type Express } from "express";
+import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import pinoHttp from "pino-http";
@@ -6,7 +6,7 @@ import * as Sentry from "@sentry/node";
 import router from "./routes";
 import { logger } from "./lib/logger";
 
-const app: Express = express();
+const app = express();
 
 app.use(helmet());
 app.use(

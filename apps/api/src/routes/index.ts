@@ -1,4 +1,4 @@
-import { Router, type IRouter } from "express";
+import { Router } from "express";
 import healthRouter from "./health";
 import authRouter from "./auth";
 import paymentsRouter from "./payments";
@@ -16,7 +16,7 @@ import integrationsRouter from "./integrations";
 import mcpRouter from "./mcp";
 import { apiLimiter, authLimiter, uploadLimiter } from "../middlewares/rateLimiter.js";
 
-const router: IRouter = Router();
+const router = Router();
 
 router.use("/auth", authLimiter);
 router.use("/upload", uploadLimiter);

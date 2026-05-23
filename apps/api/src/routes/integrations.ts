@@ -1,8 +1,8 @@
-import { Router, type IRouter, type Request, type Response } from "express";
+import { Router, type Request, type Response } from "express";
 import { google } from "googleapis";
 import { getInsforgeAdmin } from "../lib/insforge.js";
 
-const router: IRouter = Router();
+const router = Router();
 
 const APP_URL = process.env.APP_URL ?? "https://nibook.noonstudio.africa";
 const REDIRECT_URI = `${APP_URL}/api/integrations/google/callback`;

@@ -1,11 +1,11 @@
-import { Router, type IRouter, type Request, type Response } from "express";
+import { Router, type Request, type Response } from "express";
 import { getInsforgeAdmin } from "../lib/insforge.js";
 import {
   jengaPost, jengaGet, normalizePhone, makeReference, splitAmount,
   MERCHANT_CODE, NIBOOK_ACCOUNT,
 } from "../lib/jenga.js";
 
-const router: IRouter = Router();
+const router = Router();
 
 // ─── IMPORTANT: Confirm these endpoint paths from your JengaHQ dashboard ─────
 // After signing up at https://jengahq.typeform.com/to/acVeS3 and accessing

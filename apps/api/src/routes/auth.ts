@@ -1,7 +1,7 @@
-import { Router, type IRouter, type Request, type Response } from "express";
+import { Router, type Request, type Response } from "express";
 import { getInsforgeAdmin } from "../lib/insforge.js";
 
-const router: IRouter = Router();
+const router = Router();
 
 function decodeJwtSub(token: string): string | null {
   try {

@@ -1,7 +1,7 @@
-import { Router, type IRouter, type Request, type Response } from "express";
+import { Router, type Request, type Response } from "express";
 import { getInsforgeAdmin } from "../lib/insforge.js";
 
-const router: IRouter = Router();
+const router = Router();
 
 router.post("/waitlist", async (req: Request, res: Response) => {
   const { email, name } = req.body as { email?: string; name?: string };

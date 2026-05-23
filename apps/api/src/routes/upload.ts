@@ -1,7 +1,7 @@
-import express, { Router, type IRouter, type Request, type Response } from "express";
+import express, { Router, type Request, type Response } from "express";
 import { getInsforgeAdmin } from "../lib/insforge.js";
 
-const router: IRouter = Router();
+const router = Router();
 const BUCKET = "nibook-media";
 
 const ALLOWED_TYPES: Record<string, string> = {

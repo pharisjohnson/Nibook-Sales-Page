@@ -1,8 +1,8 @@
-import { Router, type IRouter, type Request, type Response } from "express";
+import { Router, type Request, type Response } from "express";
 import { getInsforgeAdmin } from "../lib/insforge.js";
 import { syncBookingToCalendar } from "./integrations.js";
 
-const router: IRouter = Router();
+const router = Router();
 
 router.get("/bookings", async (req: Request, res: Response) => {
   const { owner_id, status, limit = "100", offset = "0", from, to } = req.query as Record<string, string>;

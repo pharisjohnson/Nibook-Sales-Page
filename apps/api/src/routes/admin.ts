@@ -1,7 +1,7 @@
-import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
+import { Router, type Request, type Response, type NextFunction } from "express";
 import { getInsforgeAdmin } from "../lib/insforge.js";
 
-const router: IRouter = Router();
+const router = Router();
 
 function requireAdminKey(req: Request, res: Response, next: NextFunction) {
   const key = process.env["ADMIN_SECRET_KEY"];

@@ -1,11 +1,11 @@
-import { Router, type IRouter, type Request, type Response } from "express";
+import { Router, type Request, type Response } from "express";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 import { getInsforgeAdmin } from "../lib/insforge.js";
 import { randomBytes } from "crypto";
 
-const router: IRouter = Router();
+const router = Router();
 
 function generateApiKey() {
   return "nk_" + randomBytes(24).toString("hex");
