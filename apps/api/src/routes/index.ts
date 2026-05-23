@@ -11,7 +11,6 @@ import servicesRouter from "./services";
 import waitlistRouter from "./waitlist";
 import uploadRouter from "./upload";
 import adminRouter from "./admin";
-import jengaPaymentsRouter from "./jenga-payments";
 import integrationsRouter from "./integrations";
 import mcpRouter from "./mcp";
 import { apiLimiter, authLimiter, uploadLimiter } from "../middlewares/rateLimiter.js";
@@ -34,7 +33,7 @@ router.use(servicesRouter);
 router.use(waitlistRouter);
 router.use(uploadRouter);
 router.use(adminRouter);
-router.use(jengaPaymentsRouter);
+
 router.use(integrationsRouter);
 router.use(mcpRouter);
 
