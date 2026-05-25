@@ -8,6 +8,11 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth";
 import { useProfile } from "@/lib/profile";
 import { apiFetch } from "@/lib/api";
+import {
+  getSignupBusinessName,
+  clearPendingBusinessName,
+  slugFromBusinessName,
+} from "@/lib/signup-business";
 import { useToast } from "@/hooks/use-toast";
 
 const DEFAULT_CATEGORIES = [
@@ -35,13 +40,15 @@ export default function OnboardingPage() {
   const [customCategory, setCustomCategory] = useState("");
   const [extraCategories, setExtraCategories] = useState<string[]>([]);
 
-  // Pre-populate from profile (business name entered at signup)
+  // Pre-populate from profile, auth user metadata, or signup session storage
   useEffect(() => {
-    if (profile?.business_name && !bizName) setBizName(profile.business_name);
+    const nameFromSignup =
+      profile?.business_name?.trim() || getSignupBusinessName(user);
+    if (nameFromSignup && !bizName) setBizName(nameFromSignup);
     if (profile?.phone && !phone) setPhone(profile.phone);
     if (profile?.location && !location) setLocation(profile.location);
     if (profile?.category && !category) setCategory(profile.category);
-  }, [profile]);
+  }, [profile, user, bizName, phone, location, category]);
 
   // Load custom categories from DB
   useEffect(() => {
@@ -93,13 +100,7 @@ export default function OnboardingPage() {
     }
 
     setLoading(true);
-    const slug = bizName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-
-    if (!profile?.email) {
-      toast({ title: "Profile email missing", variant: "destructive" });
-      setLoading(false);
-      return;
-    }
+    const slug = slugFromBusinessName(bizName);
 
     const { error } = await updateProfile({
       business_name: bizName.trim(),
@@ -107,13 +108,13 @@ export default function OnboardingPage() {
       location: location.trim() || null,
       category: finalCategory,
       slug,
-      business_email: profile.email,
     });
     setLoading(false);
     if (error) {
       toast({ title: "Error saving profile", description: error, variant: "destructive" });
       return;
     }
+    clearPendingBusinessName();
     setStep(1);
   }
 

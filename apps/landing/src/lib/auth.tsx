@@ -1,7 +1,12 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { UserSchema } from "@insforge/sdk";
 import { insforge } from "./insforge";
-import { setSession, clearSession, getStoredUser } from "./api";
+import { setSession, clearSession, getStoredUser, getStoredToken, apiFetch } from "./api";
+import {
+  setPendingBusinessName,
+  clearPendingBusinessName,
+  slugFromBusinessName,
+} from "./signup-business";
 import { identifyUser, resetAnalyticsUser, track } from "./analytics";
 
 type InsforgeUser = UserSchema;
@@ -26,6 +31,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const storedToken = getStoredToken();
+    if (storedToken) insforge.setAccessToken(storedToken);
+
     insforge.auth.getCurrentUser().then(({ data }) => {
       const sdkUser = data?.user ?? null;
       if (sdkUser) {
@@ -33,8 +41,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const stored = getStoredUser();
         if (!stored || stored.id !== sdkUser.id) {
           const raw = data as any;
-          const token = raw?.session?.access_token ?? raw?.access_token ?? null;
-          if (token) setSession({ id: sdkUser.id, email: sdkUser.email ?? "" }, token);
+          const token = raw?.session?.access_token ?? raw?.access_token ?? storedToken ?? null;
+          if (token) {
+            insforge.setAccessToken(token);
+            setSession({ id: sdkUser.id, email: sdkUser.email ?? "" }, token);
+          }
         }
       } else {
         const stored = getStoredUser();
@@ -43,6 +54,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     });
   }, []);
+
+  async function persistSignupBusinessName(userId: string, businessName: string) {
+    const name = businessName.trim();
+    if (!name) return;
+    setPendingBusinessName(name);
+    const slug = slugFromBusinessName(name);
+    await apiFetch(`/profile/${userId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ business_name: name, slug, plan: "trial" }),
+    });
+  }
 
   async function signUp(email: string, password: string, businessName: string) {
     const { data, error } = await insforge.auth.signUp({
@@ -56,21 +78,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const token = raw?.session?.access_token ?? raw?.access_token ?? null;
     const requiresVerification = !token;
 
+    const name = businessName.trim();
+    if (name) setPendingBusinessName(name);
+
     if (data?.user && token) {
       setUser(data.user);
       setSession({ id: data.user.id, email: data.user.email ?? "" }, token);
-      const name = businessName.trim();
-      const slug = name ? name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") : undefined;
-      try {
-        await insforge.database.from("profiles").upsert(
-          {
-            id: data.user.id,
-            ...(name ? { business_name: name, slug } : {}),
-            plan: "trial",
-          },
-          { onConflict: "id" },
-        );
-      } catch (_) { /* row may already exist from a trigger */ }
+      insforge.setAccessToken(token);
+      await persistSignupBusinessName(data.user.id, name);
       identifyUser(data.user.id, data.user.email ?? "", name);
       track.signedUp();
     }
@@ -89,15 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession({ id: data.user.id, email: data.user.email ?? "" }, sessionToken);
         insforge.setAccessToken(sessionToken);
       }
-      try {
-        await insforge.database.from("profiles").upsert(
-          {
-            id: data.user.id,
-            ...(businessName ? { business_name: businessName } : {}),
-          },
-          { onConflict: "id" },
-        );
-      } catch (_) { /* row already exists */ }
+      await persistSignupBusinessName(data.user.id, businessName ?? "");
       track.signedUp();
     }
     return { error: null };
@@ -116,7 +123,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(data.user);
       const raw = data as any;
       const token = raw?.session?.access_token ?? raw?.access_token ?? null;
-      if (token) setSession({ id: data.user.id, email: data.user.email ?? "" }, token);
+      if (token) {
+        insforge.setAccessToken(token);
+        setSession({ id: data.user.id, email: data.user.email ?? "" }, token);
+      }
       identifyUser(data.user.id, data.user.email ?? "");
       track.signedIn();
     }
@@ -144,6 +154,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function signOut() {
     await insforge.auth.signOut();
     clearSession();
+    clearPendingBusinessName();
     resetAnalyticsUser();
     setUser(null);
   }

@@ -20,6 +20,10 @@ export function clearSession() {
   localStorage.removeItem(USER_KEY);
 }
 
+export function getStoredToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
 export async function uploadFile(
   file: File,
   folder: "profiles" | "services" | "team",

@@ -32,6 +32,14 @@ vi.mock("./api", () => ({
   setSession: vi.fn(),
   clearSession: vi.fn(),
   getStoredUser: vi.fn().mockReturnValue(null),
+  getStoredToken: vi.fn().mockReturnValue(null),
+  apiFetch: vi.fn().mockResolvedValue({ data: null, error: null }),
+}));
+
+vi.mock("./signup-business", () => ({
+  setPendingBusinessName: vi.fn(),
+  clearPendingBusinessName: vi.fn(),
+  slugFromBusinessName: (n: string) => n.toLowerCase().replace(/\s+/g, "-"),
 }));
 
 vi.mock("./analytics", () => ({
