@@ -101,6 +101,11 @@ export default function OnboardingPage() {
 
     setLoading(true);
     const slug = slugFromBusinessName(bizName);
+    if (!slug) {
+      toast({ title: "Invalid business name", description: "Use letters or numbers in your business name.", variant: "destructive" });
+      setLoading(false);
+      return;
+    }
 
     const { error } = await updateProfile({
       business_name: bizName.trim(),

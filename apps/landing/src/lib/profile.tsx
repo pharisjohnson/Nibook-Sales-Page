@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { apiFetch } from "./api";
+import { apiFetch, getStoredToken } from "./api";
 import { useAuth } from "./auth";
+import { insforge } from "./insforge";
 
 export interface Profile {
   id: string;
@@ -57,12 +58,28 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
   async function updateProfile(updates: Partial<Omit<Profile, "id" | "created_at">>) {
     if (!user) return { error: "Not authenticated" };
+
+    const token = getStoredToken();
+    if (token) insforge.setAccessToken(token);
+
+    const { data: sdkData, error: sdkError } = await insforge.database
+      .from("profiles")
+      .update(updates)
+      .eq("id", user.id)
+      .select()
+      .single();
+
+    if (!sdkError && sdkData) {
+      setProfile(sdkData as Profile);
+      return { error: null };
+    }
+
     const { data, error } = await apiFetch<{ data: Profile }>(`/profile/${user.id}`, {
       method: "PATCH",
       body: JSON.stringify(updates),
     });
     if (!error && data?.data) setProfile(data.data);
-    return { error };
+    return { error: error ?? (sdkError as { message?: string })?.message ?? "Failed to save profile" };
   }
 
   return (

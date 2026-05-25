@@ -6,6 +6,7 @@ const selectChain = vi.fn(() => ({ single: singleResult }));
 const eqChain = vi.fn(() => ({ eq: eqChain, neq: neqChain, limit: limitResult }));
 const neqChain = vi.fn(() => ({ limit: limitResult }));
 
+const updateEqChain = vi.fn(() => ({ select: selectChain }));
 const mockDb = {
   database: {
     from: vi.fn(() => ({
@@ -17,7 +18,7 @@ const mockDb = {
         single: singleResult,
       })),
       upsert: vi.fn(() => ({ select: selectChain })),
-      update: vi.fn(() => ({ eq: vi.fn(() => ({ select: selectChain })) })),
+      update: vi.fn(() => ({ eq: updateEqChain })),
       insert: vi.fn(() => ({ select: selectChain })),
     })),
   },
@@ -26,6 +27,10 @@ const mockDb = {
 vi.mock("../lib/insforge.js", () => ({
   getInsforgeAdmin: vi.fn(() => mockDb),
   createUserClient: vi.fn(() => mockDb),
+}));
+
+vi.mock("../lib/jwt.js", () => ({
+  decodeJwtSub: vi.fn(() => "user-1"),
 }));
 
 import profileRouter from "./profile.js";
@@ -87,9 +92,9 @@ describe("PATCH /profile/:id", () => {
     limitResult.mockResolvedValue({ data: [], error: null });
 
     const capturedData: any[] = [];
-    const upsertMock = vi.fn((data: any) => {
+    const updateMock = vi.fn((data: any) => {
       capturedData.push(data);
-      return { select: selectChain };
+      return { eq: updateEqChain };
     });
     mockDb.database.from = vi.fn(() => ({
       select: vi.fn(() => ({
@@ -99,8 +104,8 @@ describe("PATCH /profile/:id", () => {
         order: vi.fn(() => ({ limit: limitResult })),
         single: singleResult,
       })),
-      upsert: upsertMock,
-      update: vi.fn(() => ({ eq: vi.fn(() => ({ select: selectChain })) })),
+      upsert: vi.fn(() => ({ select: selectChain })),
+      update: updateMock,
       insert: vi.fn(() => ({ select: selectChain })),
     }));
     singleResult.mockResolvedValue({ data: { id: "user-1" }, error: null });

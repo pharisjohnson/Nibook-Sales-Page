@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { getInsforgeAdmin, createUserClient } from "../lib/insforge.js";
+import { decodeJwtSub } from "../lib/jwt.js";
 
 const router = Router();
 
@@ -20,6 +21,16 @@ router.patch("/profile/:id", async (req: Request, res: Response) => {
   const authHeader = req.headers.authorization;
   const userToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
 
+  if (!userToken) {
+    res.status(401).json({ error: "Authorization required" });
+    return;
+  }
+  const tokenUserId = decodeJwtSub(userToken);
+  if (!tokenUserId || tokenUserId !== id) {
+    res.status(403).json({ error: "Cannot update another user's profile" });
+    return;
+  }
+
   const updates = req.body as Record<string, unknown>;
   const allowed = [
     "business_name", "slug", "phone", "location", "bio", "category",
@@ -31,31 +42,60 @@ router.patch("/profile/:id", async (req: Request, res: Response) => {
   ];
   const safe = Object.fromEntries(Object.entries(updates).filter(([k]) => allowed.includes(k)));
 
-  // Ensure the requested slug is unique — auto-suffix with -1, -2, … if taken by another profile
-  if (safe.slug && typeof safe.slug === "string") {
-    const admin = getInsforgeAdmin();
-    const baseSlug = safe.slug as string;
-    let slug = baseSlug;
-    let attempt = 0;
-    while (true) {
-      const { data: existing } = await admin.database
-        .from("profiles").select("id").eq("slug", slug).neq("id", id).limit(1);
-      if (!Array.isArray(existing) || existing.length === 0) { safe.slug = slug; break; }
-      attempt++;
-      slug = `${baseSlug}-${attempt}`;
-    }
+  if (typeof safe.slug === "string" && !safe.slug.trim()) {
+    delete safe.slug;
   }
 
   try {
-    // Use the user's own JWT so PostgREST evaluates RLS as auth.uid() = user id.
-    // Falls back to admin client if no token is present (e.g. server-side calls).
-    const db = userToken ? createUserClient(userToken) : getInsforgeAdmin();
-    const { data, error } = await db.database
-      .from("profiles")
-      .upsert({ id, ...safe }, { onConflict: "id" })
-      .select()
-      .single();
-    if (error) { res.status(500).json({ error: error.message }); return; }
+    const admin = getInsforgeAdmin();
+
+    // Ensure the requested slug is unique — auto-suffix with -1, -2, … if taken by another profile
+    if (safe.slug && typeof safe.slug === "string") {
+      const baseSlug = safe.slug as string;
+      let slug = baseSlug;
+      let attempt = 0;
+      while (attempt < 50) {
+        const { data: existing } = await admin.database
+          .from("profiles").select("id").eq("slug", slug).neq("id", id).limit(1);
+        if (!Array.isArray(existing) || existing.length === 0) { safe.slug = slug; break; }
+        attempt++;
+        slug = `${baseSlug}-${attempt}`;
+      }
+    }
+
+    async function writeProfile(db: ReturnType<typeof getInsforgeAdmin>) {
+      const { data: updated, error: updateError } = await db.database
+        .from("profiles")
+        .update(safe)
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (!updateError && updated) return { data: updated, error: null };
+
+      const { data: inserted, error: insertError } = await db.database
+        .from("profiles")
+        .insert({ id, ...safe })
+        .select()
+        .single();
+
+      return { data: inserted, error: insertError ?? updateError };
+    }
+
+    // Prefer user JWT (RLS); fall back to server admin key if configured
+    let { data, error } = await writeProfile(createUserClient(userToken));
+    if (error) {
+      ({ data, error } = await writeProfile(admin));
+    }
+
+    if (error) {
+      const message =
+        (error as { message?: string }).message ??
+        (error as { details?: string }).details ??
+        JSON.stringify(error);
+      res.status(500).json({ error: message });
+      return;
+    }
     res.json({ data });
   } catch (err) {
     res.status(500).json({ error: String(err) });

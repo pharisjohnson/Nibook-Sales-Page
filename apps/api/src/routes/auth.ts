@@ -1,16 +1,8 @@
 import { Router, type Request, type Response } from "express";
 import { getInsforgeAdmin } from "../lib/insforge.js";
+import { decodeJwtSub } from "../lib/jwt.js";
 
 const router = Router();
-
-function decodeJwtSub(token: string): string | null {
-  try {
-    const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString("utf8"));
-    return payload.sub ?? payload.id ?? null;
-  } catch {
-    return null;
-  }
-}
 
 router.post("/auth/signup", async (req: Request, res: Response) => {
   const { email, password, businessName } = req.body as { email?: string; password?: string; businessName?: string };

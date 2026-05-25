@@ -5,7 +5,9 @@ const url =
   process.env.VITE_INSFORGE_URL ??
   "";
 
+/** Prefer API key on the server (bypasses RLS). Fall back to anon for read-only/dev. */
 const serviceKey =
+  process.env.INSFORGE_API_KEY ??
   process.env.INSFORGE_SERVICE_KEY ??
   process.env.VITE_INSFORGE_ANON_KEY ??
   "";
