@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { getInsforgeAdmin } from "../lib/insforge.js";
+import { getInsforgeAdmin, createUserClient } from "../lib/insforge.js";
 import { syncBookingToCalendar } from "./integrations.js";
 
 const router = Router();
@@ -8,7 +8,10 @@ router.get("/bookings", async (req: Request, res: Response) => {
   const { owner_id, status, limit = "100", offset = "0", from, to } = req.query as Record<string, string>;
   if (!owner_id) { res.status(400).json({ error: "owner_id required" }); return; }
   try {
-    const db = getInsforgeAdmin();
+    const authHeader = req.headers.authorization;
+    const userToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    const db = userToken ? createUserClient(userToken) : getInsforgeAdmin();
+
     let q = db.database
       .from("bookings")
       .select("*, services(name, price)")
@@ -36,7 +39,10 @@ router.post("/bookings", async (req: Request, res: Response) => {
     return;
   }
   try {
-    const db = getInsforgeAdmin();
+    const authHeader = req.headers.authorization;
+    const userToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    const db = userToken ? createUserClient(userToken) : getInsforgeAdmin();
+
     const { data, error } = await db.database.from("bookings").insert({
       owner_id, service_id: service_id ?? null, client_name, client_phone: client_phone ?? null,
       client_email: client_email ?? null, scheduled_at, duration_minutes: duration_minutes ?? 60,
@@ -48,16 +54,15 @@ router.post("/bookings", async (req: Request, res: Response) => {
 
     // Non-blocking: sync to Google Calendar if owner has connected it
     if (data && owner_id) {
-      const db2 = getInsforgeAdmin();
       Promise.resolve(
-        db2.database
+        db.database
           .from("profiles")
           .select("google_refresh_token, google_access_token, business_name")
           .eq("id", owner_id as string)
           .single()
           .then(({ data: profile }) => {
             if (!profile?.google_refresh_token) return;
-            return db2.database
+            return db.database
               .from("services")
               .select("name, price")
               .eq("id", (service_id as string) ?? "")
@@ -80,7 +85,10 @@ router.patch("/bookings/:id", async (req: Request, res: Response) => {
   const { id } = req.params;
   const updates = req.body as Record<string, unknown>;
   try {
-    const db = getInsforgeAdmin();
+    const authHeader = req.headers.authorization;
+    const userToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    const db = userToken ? createUserClient(userToken) : getInsforgeAdmin();
+
     const { data, error } = await db.database
       .from("bookings").update(updates).eq("id", id).select().single();
     if (error) { res.status(500).json({ error: error.message }); return; }
@@ -93,7 +101,10 @@ router.patch("/bookings/:id", async (req: Request, res: Response) => {
 router.delete("/bookings/:id", async (req: Request, res: Response) => {
   const { id } = req.params;
   try {
-    const db = getInsforgeAdmin();
+    const authHeader = req.headers.authorization;
+    const userToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    const db = userToken ? createUserClient(userToken) : getInsforgeAdmin();
+
     const { error } = await db.database.from("bookings").delete().eq("id", id);
     if (error) { res.status(500).json({ error: error.message }); return; }
     res.json({ success: true });

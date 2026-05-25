@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Eye, EyeOff, Loader2, ArrowRight, Mail, RotateCcw } from "lucide-react";
+import { Eye, EyeOff, Loader2, ArrowRight, ArrowLeft, Mail, RotateCcw, KeyRound } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -15,10 +15,10 @@ interface AuthModalProps {
   defaultTab?: "signin" | "signup";
 }
 
-type ModalStep = "form" | "verify";
+type ModalStep = "form" | "verify" | "forgot" | "forgot-code" | "forgot-reset";
 
 export function AuthModal({ open, onClose, defaultTab = "signin" }: AuthModalProps) {
-  const { signIn, signUp, verifyEmail, resendVerification } = useAuth();
+  const { signIn, signUp, verifyEmail, resendVerification, sendResetPasswordEmail, verifyResetCode, resetPassword } = useAuth();
   const [, navigate] = useLocation();
   const [tab, setTab] = useState<"signin" | "signup">(defaultTab);
   const [step, setStep] = useState<ModalStep>("form");
@@ -27,6 +27,7 @@ export function AuthModal({ open, onClose, defaultTab = "signin" }: AuthModalPro
   const [showPass, setShowPass] = useState(false);
   const [pendingEmail, setPendingEmail] = useState("");
   const [otp, setOtp] = useState("");
+  const [resetToken, setResetToken] = useState<string | null>(null);
 
   const [form, setForm] = useState({ email: "", password: "", businessName: "" });
 
@@ -40,6 +41,8 @@ export function AuthModal({ open, onClose, defaultTab = "signin" }: AuthModalPro
     setStep("form");
     setOtp("");
     setError("");
+    setResetToken(null);
+    setPendingEmail("");
     onClose();
   }
 
@@ -73,6 +76,54 @@ export function AuthModal({ open, onClose, defaultTab = "signin" }: AuthModalPro
     }
   }
 
+  async function handleForgotSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.email.trim()) { setError("Enter your email address"); return; }
+    setLoading(true);
+    setError("");
+    try {
+      const { error: err } = await sendResetPasswordEmail(form.email);
+      if (err) { setError(err); return; }
+      setPendingEmail(form.email);
+      setOtp("");
+      setStep("forgot-code");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleForgotCode(e: React.FormEvent) {
+    e.preventDefault();
+    if (otp.trim().length < 6) { setError("Enter the full 6-digit code"); return; }
+    setLoading(true);
+    setError("");
+    try {
+      const { error: err, resetToken: token } = await verifyResetCode(pendingEmail, otp.trim());
+      if (err) { setError(err); return; }
+      if (!token) { setError("Invalid reset token"); return; }
+      setResetToken(token);
+      setOtp("");
+      setStep("forgot-reset");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleForgotReset(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.password.trim() || form.password.length < 6) { setError("Password must be at least 6 characters"); return; }
+    setLoading(true);
+    setError("");
+    try {
+      const { error: err } = await resetPassword(form.password, resetToken!);
+      if (err) { setError(err); return; }
+      handleClose();
+      navigate("/");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handleVerify(e: React.FormEvent) {
     e.preventDefault();
     if (otp.trim().length < 6) { setError("Please enter the full 6-digit code"); return; }
@@ -101,11 +152,12 @@ export function AuthModal({ open, onClose, defaultTab = "signin" }: AuthModalPro
       signup: { title: "Create your account", desc: "Start your 7-day free trial — no card needed" },
     },
     verify: { title: "Check your email", desc: `We sent a 6-digit code to ${pendingEmail}` },
+    forgot: { title: "Reset your password", desc: "Enter your email and we'll send you a reset code" },
+    "forgot-code": { title: "Check your email", desc: `Enter the 6-digit code sent to ${pendingEmail}` },
+    "forgot-reset": { title: "Choose a new password", desc: "Must be at least 6 characters" },
   };
 
-  const header = step === "verify"
-    ? headerCopy.verify
-    : headerCopy.form[tab];
+  const header = headerCopy[step] ?? headerCopy.form[tab];
 
   return (
     <Dialog open={open} onOpenChange={open => { if (!open) handleClose(); }}>
@@ -176,6 +228,163 @@ export function AuthModal({ open, onClose, defaultTab = "signin" }: AuthModalPro
                     <RotateCcw className="w-3.5 h-3.5" />
                     Resend code
                   </button>
+                </form>
+              </motion.div>
+            )}
+
+            {/* ── Forgot password: enter email ── */}
+            {step === "forgot" && (
+              <motion.div
+                key="forgot"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+              >
+                <form onSubmit={handleForgotSubmit} className="space-y-4">
+                  <div className="flex justify-center py-2">
+                    <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+                      <KeyRound className="w-8 h-8 text-primary" />
+                    </div>
+                  </div>
+
+                  <Input
+                    type="email"
+                    placeholder="Email address"
+                    value={form.email}
+                    onChange={e => { update("email", e.target.value); }}
+                    autoFocus
+                    required
+                  />
+
+                  {error && (
+                    <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-sm text-red-500 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                      {error}
+                    </motion.p>
+                  )}
+
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading
+                      ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Sending…</>
+                      : <>Send Reset Code <ArrowRight className="w-4 h-4 ml-2" /></>
+                    }
+                  </Button>
+
+                  <button
+                    type="button"
+                    onClick={() => { setStep("form"); setError(""); }}
+                    className="w-full flex items-center justify-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    Back to sign in
+                  </button>
+                </form>
+              </motion.div>
+            )}
+
+            {/* ── Forgot password: enter code ── */}
+            {step === "forgot-code" && (
+              <motion.div
+                key="forgot-code"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+              >
+                <form onSubmit={handleForgotCode} className="space-y-4">
+                  <div className="flex justify-center py-2">
+                    <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+                      <Mail className="w-8 h-8 text-primary" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-foreground mb-1.5">
+                      Reset code
+                    </label>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="Enter 6-digit code"
+                      value={otp}
+                      onChange={e => { setOtp(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }}
+                      autoFocus
+                      className="text-center text-2xl tracking-[0.5em] font-mono"
+                      maxLength={6}
+                    />
+                  </div>
+
+                  {error && (
+                    <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-sm text-red-500 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                      {error}
+                    </motion.p>
+                  )}
+
+                  <Button type="submit" className="w-full" disabled={loading || otp.length < 6}>
+                    {loading
+                      ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Verifying…</>
+                      : <>Verify Code <ArrowRight className="w-4 h-4 ml-2" /></>
+                    }
+                  </Button>
+
+                  <button
+                    type="button"
+                    onClick={() => { setStep("forgot"); setError(""); setOtp(""); }}
+                    className="w-full flex items-center justify-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    Back
+                  </button>
+                </form>
+              </motion.div>
+            )}
+
+            {/* ── Forgot password: set new password ── */}
+            {step === "forgot-reset" && (
+              <motion.div
+                key="forgot-reset"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+              >
+                <form onSubmit={handleForgotReset} className="space-y-4">
+                  <div className="flex justify-center py-2">
+                    <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+                      <KeyRound className="w-8 h-8 text-primary" />
+                    </div>
+                  </div>
+
+                  <div className="relative">
+                    <Input
+                      type={showPass ? "text" : "password"}
+                      placeholder="New password"
+                      value={form.password}
+                      onChange={e => update("password", e.target.value)}
+                      autoFocus
+                      required
+                      minLength={6}
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      onClick={() => setShowPass(v => !v)}
+                      tabIndex={-1}
+                    >
+                      {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+
+                  {error && (
+                    <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-sm text-red-500 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                      {error}
+                    </motion.p>
+                  )}
+
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading
+                      ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Resetting…</>
+                      : <>Reset Password <ArrowRight className="w-4 h-4 ml-2" /></>
+                    }
+                  </Button>
                 </form>
               </motion.div>
             )}
@@ -261,6 +470,16 @@ export function AuthModal({ open, onClose, defaultTab = "signin" }: AuthModalPro
                       <>{tab === "signin" ? "Sign In" : "Create Account"}<ArrowRight className="w-4 h-4 ml-2" /></>
                     )}
                   </Button>
+
+                  {tab === "signin" && (
+                    <button
+                      type="button"
+                      onClick={() => { setStep("forgot"); setError(""); }}
+                      className="w-full text-sm text-muted-foreground hover:text-primary transition-colors"
+                    >
+                      Forgot password?
+                    </button>
+                  )}
                 </form>
 
                 {tab === "signup" && (

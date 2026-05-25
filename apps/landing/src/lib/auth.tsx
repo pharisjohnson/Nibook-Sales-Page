@@ -14,6 +14,9 @@ interface AuthContextType {
   resendVerification: (email: string) => Promise<{ error: string | null }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
+  sendResetPasswordEmail: (email: string) => Promise<{ error: string | null }>;
+  verifyResetCode: (email: string, code: string) => Promise<{ error: string | null; resetToken: string | null }>;
+  resetPassword: (newPassword: string, resetToken: string) => Promise<{ error: string | null }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -120,6 +123,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null };
   }
 
+  async function sendResetPasswordEmail(email: string) {
+    const { error } = await insforge.auth.sendResetPasswordEmail({ email });
+    if (error) return { error: (error as any).message ?? "Failed to send reset email" };
+    return { error: null };
+  }
+
+  async function verifyResetCode(email: string, code: string) {
+    const { data, error } = await insforge.auth.exchangeResetPasswordToken({ email, code });
+    if (error) return { error: (error as any).message ?? "Invalid code", resetToken: null };
+    return { error: null, resetToken: (data as any)?.token ?? null };
+  }
+
+  async function resetPassword(newPassword: string, resetToken: string) {
+    const { error } = await insforge.auth.resetPassword({ newPassword, otp: resetToken });
+    if (error) return { error: (error as any).message ?? "Failed to reset password" };
+    return { error: null };
+  }
+
   async function signOut() {
     await insforge.auth.signOut();
     clearSession();
@@ -128,7 +149,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, signUp, verifyEmail, resendVerification, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signUp, verifyEmail, resendVerification, signIn, signOut, sendResetPasswordEmail, verifyResetCode, resetPassword }}>
       {children}
     </AuthContext.Provider>
   );

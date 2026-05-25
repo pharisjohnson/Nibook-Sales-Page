@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { getInsforgeAdmin, createUserClient } from "../lib/insforge.js";
+import { getInsforgeAdmin } from "../lib/insforge.js";
 
 const router = Router();
 
@@ -17,12 +17,9 @@ router.get("/profile/:id", async (req: Request, res: Response) => {
 
 router.patch("/profile/:id", async (req: Request, res: Response) => {
   const { id } = req.params;
-  const authHeader = req.headers.authorization;
-  const userToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
-
   const updates = req.body as Record<string, unknown>;
   const allowed = [
-    "business_name", "slug", "phone", "location", "bio", "category",
+    "business_name", "business_email", "slug", "phone", "location", "bio", "category",
     "logo_url", "cover_url", "onboarding_completed", "plan", "avatar_url",
     "mpesa_paybill", "mpesa_account", "whatsapp_enabled", "whatsapp_phone",
     "reminder_hours", "cancellation_policy", "booking_widget_theme",
@@ -47,9 +44,7 @@ router.patch("/profile/:id", async (req: Request, res: Response) => {
   }
 
   try {
-    // Use the user's own JWT so PostgREST evaluates RLS as auth.uid() = user id.
-    // Falls back to admin client if no token is present (e.g. server-side calls).
-    const db = userToken ? createUserClient(userToken) : getInsforgeAdmin();
+    const db = getInsforgeAdmin();
     const { data, error } = await db.database
       .from("profiles")
       .upsert({ id, ...safe }, { onConflict: "id" })

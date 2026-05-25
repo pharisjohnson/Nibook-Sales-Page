@@ -2,8 +2,8 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import pinoHttp from "pino-http";
-import * as Sentry from "@sentry/node";
 import router from "./routes";
+import { setupExpressErrorHandler } from "./lib/sentry.js";
 import { logger } from "./lib/logger";
 
 const app = express();
@@ -34,6 +34,9 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", router);
 
-Sentry.setupExpressErrorHandler(app);
+// Setup Sentry error handler only if SENTRY_DSN is configured.
+// The implementation dynamically imports `@sentry/node` to avoid
+// pulling optional OpenTelemetry instrumentations at startup.
+setupExpressErrorHandler(app);
 
 export default app;

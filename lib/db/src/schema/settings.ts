@@ -9,12 +9,12 @@ import {z} from "zod/v4";
 export const settingsTable = pgTable("settings", {
   id: serial("id").primaryKey(),
   userId: text("user_id").notNull(),  // Foreign key to users table
-  storageBucket: text("storage_bucket").optional(),  // Cloud storage config
-  apiKey: text("api_key").optional(),  // API authentication
-  theme: text("theme").optional().default("light"),  // UI theme
+  storageBucket: text("storage_bucket"),  // Cloud storage config
+  apiKey: text("api_key"),  // API authentication
+  theme: text("theme").default("light"),  // UI theme
   notificationEmail: boolean("notification_email").default(false),  // Email opt-in
-  timezone: text("timezone").optional(),  // User timezone
-  maxFileSize: decimal("max_file_size").optional().default(10.0),  // File upload limit (MB)
+  timezone: text("timezone"),  // User timezone
+  maxFileSize: decimal("max_file_size").default("10.0"),  // File upload limit (MB)
   analyticsEnabled: boolean("analytics_enabled").default(true),  // Data tracking
 });
 

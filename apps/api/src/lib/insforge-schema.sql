@@ -9,6 +9,7 @@ create extension if not exists "pgcrypto";
 create table if not exists public.profiles (
   id uuid references auth.users on delete cascade primary key,
   business_name text,
+  business_email text,
   slug text unique,
   phone text,
   location text,
@@ -27,6 +28,20 @@ create table if not exists public.profiles (
   reminder_hours int default 24,
   cancellation_policy text,
   booking_widget_theme text default 'light',
+  payout_mobile text,
+  payout_bank_name text,
+  payout_bank_account text,
+  payout_account_name text,
+  google_refresh_token text,
+  google_access_token text,
+  google_token_expiry timestamptz,
+  google_calendar_email text,
+  subscription_plan text,
+  subscription_status text,
+  paystack_customer_code text,
+  subscription_code text,
+  subscription_started_at timestamptz,
+  api_key text,
   created_at timestamptz default now()
 );
 
@@ -34,8 +49,12 @@ alter table public.profiles enable row level security;
 
 create policy "Users can view own profile"
   on public.profiles for select using (auth.uid() = id);
+create policy "Users can insert own profile"
+  on public.profiles for insert with check (auth.uid() = id);
 create policy "Users can update own profile"
   on public.profiles for update using (auth.uid() = id);
+create policy "Users can delete own profile"
+  on public.profiles for delete using (auth.uid() = id);
 create policy "Public profiles are viewable"
   on public.profiles for select using (onboarding_completed = true);
 
