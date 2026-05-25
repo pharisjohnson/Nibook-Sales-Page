@@ -423,12 +423,11 @@ export function AuthModal({ open, onClose, defaultTab = "signin" }: AuthModalPro
                   <AnimatePresence>
                     {tab === "signup" && (
                       <motion.div key="bizname" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
-                        <Input
-                          placeholder="Business name (e.g. Amina's Beauty Studio)"
-                          value={form.businessName}
-                          onChange={e => update("businessName", e.target.value)}
-                          required={tab === "signup"}
-                        />
+          <Input 
+            placeholder="Business name (e.g. Amina's Beauty Studio)" 
+            value={form.businessName} 
+            onChange={e => update("businessName", e.target.value)} 
+          />
                       </motion.div>
                     )}
                   </AnimatePresence>

@@ -94,12 +94,20 @@ export default function OnboardingPage() {
 
     setLoading(true);
     const slug = bizName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+
+    if (!profile?.email) {
+      toast({ title: "Profile email missing", variant: "destructive" });
+      setLoading(false);
+      return;
+    }
+
     const { error } = await updateProfile({
       business_name: bizName.trim(),
       phone: phone.trim() || null,
       location: location.trim() || null,
       category: finalCategory,
       slug,
+      business_email: profile.email,
     });
     setLoading(false);
     if (error) {
