@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { getInsforgeAdmin } from "../lib/insforge.js";
+import { getInsforgeAdmin, createUserClient } from "../lib/insforge.js";
 import { decodeJwtSub } from "../lib/jwt.js";
 
 const router = Router();
@@ -35,11 +35,16 @@ router.put("/availability/:owner_id/schedule", async (req: Request, res: Respons
   if (!userId || userId !== owner_id) { res.status(403).json({ error: "Cannot modify another user's availability" }); return; }
 
   try {
-    const db = getInsforgeAdmin();
-    await db.database.from("availability_schedules").delete().eq("owner_id", owner_id);
-    const { error } = await db.database.from("availability_schedules").insert(
-      schedule.map(s => ({ ...s, owner_id })),
-    );
+    async function writeSchedule(db: ReturnType<typeof getInsforgeAdmin>) {
+      await db.database.from("availability_schedules").delete().eq("owner_id", owner_id);
+      return db.database.from("availability_schedules").insert(
+        schedule.map(s => ({ ...s, owner_id })),
+      );
+    }
+    let { error } = await writeSchedule(createUserClient(userToken));
+    if (error) {
+      ({ error } = await writeSchedule(getInsforgeAdmin()));
+    }
     if (error) { res.status(500).json({ error: error.message }); return; }
     res.json({ success: true });
   } catch (err) {
@@ -59,11 +64,16 @@ router.post("/availability/:owner_id/blackouts", async (req: Request, res: Respo
   if (!userId || userId !== owner_id) { res.status(403).json({ error: "Cannot modify another user's availability" }); return; }
 
   try {
-    const db = getInsforgeAdmin();
-    const { data, error } = await db.database
-      .from("availability_blackouts")
-      .insert({ owner_id, date, reason: reason ?? "Time off" })
-      .select().single();
+    async function writeBlackout(db: ReturnType<typeof getInsforgeAdmin>) {
+      return db.database
+        .from("availability_blackouts")
+        .insert({ owner_id, date, reason: reason ?? "Time off" })
+        .select().single();
+    }
+    let { data, error } = await writeBlackout(createUserClient(userToken));
+    if (error) {
+      ({ data, error } = await writeBlackout(getInsforgeAdmin()));
+    }
     if (error) { res.status(500).json({ error: error.message }); return; }
     res.status(201).json({ data });
   } catch (err) {
@@ -81,8 +91,13 @@ router.delete("/availability/:owner_id/blackouts/:id", async (req: Request, res:
   if (!userId || userId !== owner_id) { res.status(403).json({ error: "Cannot modify another user's availability" }); return; }
 
   try {
-    const db = getInsforgeAdmin();
-    const { error } = await db.database.from("availability_blackouts").delete().eq("id", id).eq("owner_id", owner_id);
+    async function removeBlackout(db: ReturnType<typeof getInsforgeAdmin>) {
+      return db.database.from("availability_blackouts").delete().eq("id", id).eq("owner_id", owner_id);
+    }
+    let { error } = await removeBlackout(createUserClient(userToken));
+    if (error) {
+      ({ error } = await removeBlackout(getInsforgeAdmin()));
+    }
     if (error) { res.status(500).json({ error: error.message }); return; }
     res.json({ success: true });
   } catch (err) {
@@ -101,4 +116,25 @@ router.put("/availability/:owner_id/rules", async (req: Request, res: Response) 
   if (!userId || userId !== owner_id) { res.status(403).json({ error: "Cannot modify another user's availability" }); return; }
 
   try {
-    const db = getInsforgeAdmin();
+    async function writeRules(db: ReturnType<typeof getInsforgeAdmin>) {
+      await db.database.from("availability_rules").delete().eq("owner_id", owner_id);
+      return db.database.from("availability_rules").insert({
+        owner_id,
+        buffer_minutes: (rules as any).buffer_minutes ?? 15,
+        min_notice_hours: (rules as any).min_notice_hours ?? 2,
+        max_advance_days: (rules as any).max_advance_days ?? 30,
+        cancellation_window_hours: (rules as any).cancellation_window_hours ?? 24,
+      });
+    }
+    let { error } = await writeRules(createUserClient(userToken));
+    if (error) {
+      ({ error } = await writeRules(getInsforgeAdmin()));
+    }
+    if (error) { res.status(500).json({ error: error.message }); return; }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+export default router;
