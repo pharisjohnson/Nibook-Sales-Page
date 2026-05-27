@@ -1,7 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
-import { ArrowRight, ArrowLeft, Check, Loader2, Plus, Scissors, Clock, DollarSign } from "lucide-react";
+import {
+  ArrowRight, ArrowLeft, Check, Loader2, Plus, Scissors, Clock, DollarSign,
+  Copy, ExternalLink, Calendar,
+} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -13,7 +16,17 @@ import {
   clearPendingBusinessName,
   slugFromBusinessName,
 } from "@/lib/signup-business";
+import { normalizeEastAfricaPhone } from "@/lib/phone";
+import {
+  DEFAULT_WEEKLY_SCHEDULE,
+  saveWeeklySchedule,
+  saveDefaultBookingRules,
+  type DaySchedule,
+} from "@/lib/availability";
+import { publicBookingPath, ROUTES } from "@/lib/routes";
+import { OnboardingAvailabilityStep } from "@/components/onboarding/OnboardingAvailabilityStep";
 import { useToast } from "@/hooks/use-toast";
+import { track } from "@/lib/analytics";
 
 const DEFAULT_CATEGORIES = [
   "Hair & Beauty", "Barbershop", "Spa & Wellness", "Fitness & Gym",
@@ -23,7 +36,7 @@ const DEFAULT_CATEGORIES = [
 
 type Service = { name: string; price: string; duration: string };
 
-const STEPS = ["Business Info", "Your Services", "You're set!"];
+const STEPS = ["Business", "Services", "Availability", "Launch"];
 
 export default function OnboardingPage() {
   const { user } = useAuth();
@@ -35,12 +48,22 @@ export default function OnboardingPage() {
 
   const [bizName, setBizName] = useState("");
   const [phone, setPhone] = useState("");
+  const [phoneError, setPhoneError] = useState<string | null>(null);
   const [location, setLocation] = useState("");
   const [category, setCategory] = useState("");
   const [customCategory, setCustomCategory] = useState("");
   const [extraCategories, setExtraCategories] = useState<string[]>([]);
+  const [savedSlug, setSavedSlug] = useState<string | null>(null);
 
-  // Pre-populate from profile, auth user metadata, or signup session storage
+  const [services, setServices] = useState<Service[]>([{ name: "", price: "", duration: "60" }]);
+  const [schedule, setSchedule] = useState<DaySchedule[]>(
+    () => DEFAULT_WEEKLY_SCHEDULE.map(d => ({ ...d })),
+  );
+
+  useEffect(() => {
+    track.onboardingStarted();
+  }, []);
+
   useEffect(() => {
     const nameFromSignup =
       profile?.business_name?.trim() || getSignupBusinessName(user);
@@ -48,38 +71,52 @@ export default function OnboardingPage() {
     if (profile?.phone && !phone) setPhone(profile.phone);
     if (profile?.location && !location) setLocation(profile.location);
     if (profile?.category && !category) setCategory(profile.category);
+    if (profile?.slug) setSavedSlug(profile.slug);
   }, [profile, user, bizName, phone, location, category]);
 
-  // Load custom categories from DB
   useEffect(() => {
     apiFetch<{ data: string[] }>("/categories").then(({ data }) => {
       if (data?.data?.length) setExtraCategories(data.data);
     });
   }, []);
 
-  const allCategories = [
-    ...DEFAULT_CATEGORIES.filter(c => c !== "Other"),
-    ...extraCategories.filter(c => !DEFAULT_CATEGORIES.includes(c)),
-    "Other",
-  ];
+  const allCategories = useMemo(
+    () => [
+      ...DEFAULT_CATEGORIES.filter(c => c !== "Other"),
+      ...extraCategories.filter(c => !DEFAULT_CATEGORIES.includes(c)),
+      "Other",
+    ],
+    [extraCategories],
+  );
 
-  const [services, setServices] = useState<Service[]>([{ name: "", price: "", duration: "60" }]);
+  const bookingPath = savedSlug ? publicBookingPath(savedSlug) : null;
+  const bookingUrl = bookingPath
+    ? `${window.location.origin}${import.meta.env.BASE_URL?.replace(/\/$/, "") || ""}${bookingPath}`.replace(/([^:]\/)\/+/g, "$1")
+    : null;
 
   function addService() {
     setServices(s => [...s, { name: "", price: "", duration: "60" }]);
   }
 
   function updateService(i: number, key: keyof Service, val: string) {
-    setServices(s => s.map((sv, idx) => idx === i ? { ...sv, [key]: val } : sv));
+    setServices(s => s.map((sv, idx) => (idx === i ? { ...sv, [key]: val } : sv)));
   }
 
   function removeService(i: number) {
     setServices(s => s.filter((_, idx) => idx !== i));
   }
 
-  async function handleSkip() {
+  async function finishOnboarding(navigateTo: string) {
     await updateProfile({ onboarding_completed: true });
-    navigate("/dashboard");
+    track.onboardingCompleted();
+    clearPendingBusinessName();
+    navigate(navigateTo);
+  }
+
+  async function handleSkip() {
+    setLoading(true);
+    await finishOnboarding(ROUTES.dashboard.home);
+    setLoading(false);
   }
 
   async function saveStep1() {
@@ -87,29 +124,40 @@ export default function OnboardingPage() {
       toast({ title: "Business name required", variant: "destructive" });
       return;
     }
+
+    const phoneResult = normalizeEastAfricaPhone(phone);
+    if (!phoneResult.valid) {
+      setPhoneError(phoneResult.error);
+      toast({ title: "Invalid phone number", description: phoneResult.error ?? undefined, variant: "destructive" });
+      return;
+    }
+    setPhoneError(null);
+
     const finalCategory = category === "Other"
       ? customCategory.trim() || "Other"
       : category || null;
 
     if (category === "Other" && customCategory.trim()) {
-      // Save custom category to DB so future users can see it
       apiFetch("/categories", {
         method: "POST",
         body: JSON.stringify({ name: customCategory.trim() }),
-      }).catch(() => {/* non-blocking */});
+      }).catch(() => undefined);
     }
 
-    setLoading(true);
     const slug = slugFromBusinessName(bizName);
     if (!slug) {
-      toast({ title: "Invalid business name", description: "Use letters or numbers in your business name.", variant: "destructive" });
-      setLoading(false);
+      toast({
+        title: "Invalid business name",
+        description: "Use letters or numbers in your business name.",
+        variant: "destructive",
+      });
       return;
     }
 
+    setLoading(true);
     const { error } = await updateProfile({
       business_name: bizName.trim(),
-      phone: phone.trim() || null,
+      phone: phoneResult.e164 ?? (phone.trim() || null),
       location: location.trim() || null,
       category: finalCategory,
       slug,
@@ -119,6 +167,7 @@ export default function OnboardingPage() {
       toast({ title: "Error saving profile", description: error, variant: "destructive" });
       return;
     }
+    setSavedSlug(slug);
     clearPendingBusinessName();
     setStep(1);
   }
@@ -133,56 +182,108 @@ export default function OnboardingPage() {
           owner_id: user!.id,
           name: svc.name.trim(),
           price: parseFloat(svc.price) || 0,
-          duration_minutes: parseInt(svc.duration) || 60,
+          duration_minutes: parseInt(svc.duration, 10) || 60,
           is_active: true,
         }),
       });
     }
-    await updateProfile({ onboarding_completed: true });
     setLoading(false);
     setStep(2);
   }
 
-  const progress = ((step + 1) / STEPS.length) * 100;
+  async function saveStep3() {
+    if (!user) return;
+    const activeDays = schedule.filter(d => d.active);
+    if (activeDays.length === 0) {
+      toast({ title: "Select at least one working day", variant: "destructive" });
+      return;
+    }
+
+    setLoading(true);
+    const [scheduleRes, rulesRes] = await Promise.all([
+      saveWeeklySchedule(user.id, schedule),
+      saveDefaultBookingRules(user.id),
+    ]);
+    setLoading(false);
+
+    if (scheduleRes.error || rulesRes.error) {
+      toast({
+        title: "Error saving availability",
+        description: scheduleRes.error ?? rulesRes.error ?? undefined,
+        variant: "destructive",
+      });
+      return;
+    }
+    setStep(3);
+  }
+
+  async function copyBookingLink() {
+    if (!bookingUrl) return;
+    try {
+      await navigator.clipboard.writeText(bookingUrl);
+      toast({ title: "Link copied", description: "Share it with clients on WhatsApp or Instagram." });
+    } catch {
+      toast({ title: bookingUrl, description: "Copy this link manually." });
+    }
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-white to-primary/10 flex flex-col items-center justify-center px-4 py-12">
-      {/* Logo */}
-      <div className="flex items-center mb-8">
-        <img src="/nibook-wordmark.png" alt="Nibook" className="h-16 w-auto" />
+    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-white to-primary/10 flex flex-col items-center px-4 py-8 sm:py-12">
+      <div className="flex items-center mb-6 sm:mb-8">
+        <img src="/nibook-wordmark.png" alt="Nibook" className="h-14 sm:h-16 w-auto" />
       </div>
 
       <div className="w-full max-w-lg">
-        {/* Step indicators */}
-        <div className="flex items-center gap-2 mb-2">
+        <div className="flex items-center gap-1.5 mb-2">
           {STEPS.map((s, i) => (
-            <div key={s} className={`flex-1 h-1.5 rounded-full transition-all duration-500 ${i <= step ? "bg-primary" : "bg-muted"}`} />
+            <div
+              key={s}
+              className={`flex-1 h-1.5 rounded-full transition-all duration-500 ${i <= step ? "bg-primary" : "bg-muted"}`}
+            />
           ))}
         </div>
-        <div className="flex justify-between text-xs text-muted-foreground mb-8">
+        <div className="flex justify-between text-[10px] sm:text-xs text-muted-foreground mb-6 sm:mb-8 gap-1">
           {STEPS.map((s, i) => (
-            <span key={s} className={i === step ? "text-primary font-semibold" : ""}>{s}</span>
+            <span key={s} className={i === step ? "text-primary font-semibold" : "truncate"}>{s}</span>
           ))}
         </div>
 
         <AnimatePresence mode="wait">
-          {/* ─── Step 0: Business Info ─── */}
           {step === 0 && (
-            <motion.div key="step0" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="bg-white border border-border rounded-2xl shadow-sm p-8 space-y-6">
+            <motion.div
+              key="step0"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="bg-white border border-border rounded-2xl shadow-sm p-6 sm:p-8 space-y-6"
+            >
               <div>
-                <h2 className="text-2xl font-bold text-foreground">Tell us about your business</h2>
-                <p className="text-muted-foreground text-sm mt-1">This information will appear on your public booking page.</p>
+                <h2 className="text-xl sm:text-2xl font-bold text-foreground">Tell us about your business</h2>
+                <p className="text-muted-foreground text-sm mt-1">
+                  Shown on your public booking page. Takes under a minute.
+                </p>
               </div>
 
               <div className="space-y-4">
                 <div className="space-y-1.5">
-                  <Label>Business name <span className="text-red-500">*</span></Label>
-                  <Input placeholder="e.g. Amina's Beauty Studio" value={bizName} onChange={e => setBizName(e.target.value)} />
+                  <Label htmlFor="biz-name">Business name <span className="text-red-500">*</span></Label>
+                  <Input
+                    id="biz-name"
+                    autoFocus
+                    placeholder="e.g. Amina's Beauty Studio"
+                    value={bizName}
+                    onChange={e => setBizName(e.target.value)}
+                  />
+                  {bizName.trim() && (
+                    <p className="text-xs text-muted-foreground">
+                      Booking link: <span className="font-mono text-primary">{publicBookingPath(slugFromBusinessName(bizName) || "…")}</span>
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-1.5">
                   <Label>Category</Label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
                     {allCategories.map(cat => (
                       <button
                         key={cat}
@@ -197,31 +298,48 @@ export default function OnboardingPage() {
                     ))}
                   </div>
                   {category === "Other" && (
-                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="pt-2">
-                      <Input
-                        placeholder="Describe your industry (e.g. Veterinary, Event Planning)"
-                        value={customCategory}
-                        onChange={e => setCustomCategory(e.target.value)}
-                        autoFocus
-                      />
-                    </motion.div>
+                    <Input
+                      placeholder="Your industry (e.g. Teacher, Veterinary)"
+                      value={customCategory}
+                      onChange={e => setCustomCategory(e.target.value)}
+                      className="mt-2"
+                    />
                   )}
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label>Phone number</Label>
-                  <Input placeholder="+254 700 000 000" value={phone} onChange={e => setPhone(e.target.value)} />
+                  <Label htmlFor="phone">Phone number</Label>
+                  <Input
+                    id="phone"
+                    inputMode="tel"
+                    placeholder="+254 700 000 000"
+                    value={phone}
+                    onChange={e => { setPhone(e.target.value); setPhoneError(null); }}
+                    onBlur={() => {
+                      const r = normalizeEastAfricaPhone(phone);
+                      if (r.valid && r.display) setPhone(r.display);
+                      if (!r.valid && phone.trim()) setPhoneError(r.error);
+                    }}
+                    aria-invalid={!!phoneError}
+                  />
+                  {phoneError && <p className="text-xs text-destructive">{phoneError}</p>}
+                  <p className="text-xs text-muted-foreground">Kenya (+254), Uganda (+256), or Tanzania (+255)</p>
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label>Location</Label>
-                  <Input placeholder="e.g. Westlands, Nairobi" value={location} onChange={e => setLocation(e.target.value)} />
+                  <Label htmlFor="location">Location</Label>
+                  <Input
+                    id="location"
+                    placeholder="e.g. Westlands, Nairobi"
+                    value={location}
+                    onChange={e => setLocation(e.target.value)}
+                  />
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 pt-2">
-                <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={handleSkip}>
-                  Skip setup for now
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+                <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={handleSkip} disabled={loading}>
+                  Skip for now
                 </Button>
                 <Button className="ml-auto gap-2" onClick={saveStep1} disabled={loading}>
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
@@ -231,26 +349,28 @@ export default function OnboardingPage() {
             </motion.div>
           )}
 
-          {/* ─── Step 1: Services ─── */}
           {step === 1 && (
-            <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="bg-white border border-border rounded-2xl shadow-sm p-8 space-y-6">
+            <motion.div
+              key="step1"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="bg-white border border-border rounded-2xl shadow-sm p-6 sm:p-8 space-y-6"
+            >
               <div>
-                <h2 className="text-2xl font-bold text-foreground">Add your services</h2>
-                <p className="text-muted-foreground text-sm mt-1">What services do you offer? You can add, edit or remove these later.</p>
+                <h2 className="text-xl sm:text-2xl font-bold text-foreground">Add your services</h2>
+                <p className="text-muted-foreground text-sm mt-1">Price in KES. You can edit these anytime.</p>
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-1">
                 {services.map((svc, i) => (
-                  <motion.div
-                    key={i}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="border border-border rounded-xl p-4 space-y-3 relative"
-                  >
+                  <div key={i} className="border border-border rounded-xl p-4 space-y-3 relative">
                     {services.length > 1 && (
                       <button
+                        type="button"
                         onClick={() => removeService(i)}
-                        className="absolute top-3 right-3 text-muted-foreground hover:text-red-500 transition-colors text-lg leading-none"
+                        className="absolute top-3 right-3 text-muted-foreground hover:text-red-500 text-lg leading-none"
+                        aria-label="Remove service"
                       >×</button>
                     )}
                     <div className="space-y-1.5">
@@ -260,16 +380,15 @@ export default function OnboardingPage() {
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
                         <Label className="flex items-center gap-1.5"><DollarSign className="w-3.5 h-3.5" />Price (KES)</Label>
-                        <Input placeholder="2500" type="number" value={svc.price} onChange={e => updateService(i, "price", e.target.value)} />
+                        <Input placeholder="2500" type="number" min={0} value={svc.price} onChange={e => updateService(i, "price", e.target.value)} />
                       </div>
                       <div className="space-y-1.5">
-                        <Label className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" />Duration (min)</Label>
-                        <Input placeholder="60" type="number" value={svc.duration} onChange={e => updateService(i, "duration", e.target.value)} />
+                        <Label className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" />Minutes</Label>
+                        <Input placeholder="60" type="number" min={15} step={15} value={svc.duration} onChange={e => updateService(i, "duration", e.target.value)} />
                       </div>
                     </div>
-                  </motion.div>
+                  </div>
                 ))}
-
                 <button
                   type="button"
                   onClick={addService}
@@ -279,38 +398,110 @@ export default function OnboardingPage() {
                 </button>
               </div>
 
-              <div className="flex items-center gap-3 pt-2">
+              <div className="flex flex-wrap items-center gap-3 pt-2">
                 <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setStep(0)}>
                   <ArrowLeft className="w-4 h-4" />Back
                 </Button>
-                <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={handleSkip}>
-                  Skip for now
+                <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setStep(2)} disabled={loading}>
+                  Skip services
                 </Button>
                 <Button className="ml-auto gap-2" onClick={saveStep2} disabled={loading}>
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  Finish Setup <ArrowRight className="w-4 h-4" />
+                  Next <ArrowRight className="w-4 h-4" />
                 </Button>
               </div>
             </motion.div>
           )}
 
-          {/* ─── Step 2: Done ─── */}
           {step === 2 && (
-            <motion.div key="step2" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white border border-border rounded-2xl shadow-sm p-10 text-center space-y-6">
+            <motion.div
+              key="step2"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="bg-white border border-border rounded-2xl shadow-sm p-6 sm:p-8 space-y-6"
+            >
+              <div>
+                <h2 className="text-xl sm:text-2xl font-bold text-foreground">Set your working hours</h2>
+                <p className="text-muted-foreground text-sm mt-1">When can clients book you? Toggle days off as needed.</p>
+              </div>
+
+              <OnboardingAvailabilityStep schedule={schedule} onChange={setSchedule} />
+
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+                <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setStep(1)}>
+                  <ArrowLeft className="w-4 h-4" />Back
+                </Button>
+                <Button className="ml-auto gap-2" onClick={saveStep3} disabled={loading}>
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  Next <ArrowRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </motion.div>
+          )}
+
+          {step === 3 && (
+            <motion.div
+              key="step3"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-white border border-border rounded-2xl shadow-sm p-6 sm:p-10 text-center space-y-6"
+            >
               <div className="flex justify-center">
                 <div className="p-4 bg-green-100 rounded-full">
                   <Check className="w-10 h-10 text-green-600" />
                 </div>
               </div>
               <div className="space-y-2">
-                <h2 className="text-2xl font-bold text-foreground">You're all set!</h2>
-                <p className="text-muted-foreground">Your Nibook account is ready. Head to your dashboard to start accepting bookings.</p>
+                <h2 className="text-xl sm:text-2xl font-bold text-foreground">You&apos;re ready to take bookings</h2>
+                <p className="text-muted-foreground text-sm">
+                  Share your link — clients book in under 60 seconds, no account needed.
+                </p>
               </div>
+
+              {bookingPath && (
+                <div className="text-left rounded-xl border bg-muted/30 p-4 space-y-3">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <Calendar className="w-4 h-4 text-primary" />
+                    Your booking page
+                  </div>
+                  <p className="font-mono text-sm break-all text-primary">{bookingPath}</p>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <Button variant="outline" className="gap-2 flex-1" onClick={copyBookingLink}>
+                      <Copy className="w-4 h-4" />Copy link
+                    </Button>
+                    <Button variant="outline" className="gap-2 flex-1" asChild>
+                      <a href={bookingPath} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="w-4 h-4" />Preview
+                      </a>
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-3 pt-2">
-                <Button className="w-full gap-2" onClick={() => navigate("/dashboard")}>
+                <Button
+                  className="w-full gap-2"
+                  disabled={loading}
+                  onClick={async () => {
+                    setLoading(true);
+                    await finishOnboarding(ROUTES.dashboard.home);
+                    setLoading(false);
+                  }}
+                >
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                   Go to Dashboard <ArrowRight className="w-4 h-4" />
                 </Button>
-                <Button variant="outline" className="w-full" onClick={() => navigate("/services")}>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  disabled={loading}
+                  onClick={async () => {
+                    setLoading(true);
+                    await finishOnboarding(ROUTES.dashboard.services);
+                    setLoading(false);
+                  }}
+                >
                   Manage Services
                 </Button>
               </div>

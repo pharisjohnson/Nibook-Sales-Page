@@ -32,6 +32,10 @@ import AvailabilityPage from "@/pages/availability";
 import TeamPage from "@/pages/team";
 import SettingsPage from "@/pages/settings";
 import AnalyticsPage from "@/pages/analytics";
+import LoginPage from "@/pages/auth/login";
+import SignupPage from "@/pages/auth/signup";
+import LegacySlugRedirect from "@/pages/legacy-slug-redirect";
+import { ROUTES } from "@/lib/routes";
 
 function PageLoader() {
   return (
@@ -62,10 +66,9 @@ function ProtectedDashboard({ children }: { children: React.ReactNode }) {
   const { profile, loading: profileLoading } = useProfile();
   if (loading || profileLoading) return <PageLoader />;
   if (!user) return <Redirect to="/" />;
-  if (profile) {
-    const isPaid = profile.plan === "starter" || profile.plan === "premium";
-    if (!isPaid && isTrialExpired(profile.created_at)) return <Redirect to="/upgrade" />;
-  }
+  if (!profile?.onboarding_completed) return <Redirect to={ROUTES.onboarding} />;
+  const isPaid = profile.plan === "starter" || profile.plan === "premium";
+  if (!isPaid && isTrialExpired(profile.created_at)) return <Redirect to="/upgrade" />;
   return <DashboardLayout>{children}</DashboardLayout>;
 }
 
@@ -74,7 +77,7 @@ function ProtectedOnboarding({ children }: { children: React.ReactNode }) {
   const { profile, loading: profileLoading } = useProfile();
   if (loading || profileLoading) return <PageLoader />;
   if (!user) return <Redirect to="/" />;
-  if (profile?.onboarding_completed) return <Redirect to="/dashboard" />;
+  if (profile?.onboarding_completed) return <Redirect to={ROUTES.dashboard.home} />;
   return <>{children}</>;
 }
 
@@ -94,6 +97,9 @@ function Router() {
       <Route path="/reviews" component={ReviewsPage} />
       <Route path="/feature-requests" component={FeatureRequestsPage} />
       <Route path="/upgrade" component={UpgradePage} />
+      <Route path={ROUTES.auth.login} component={LoginPage} />
+      <Route path={ROUTES.auth.signup} component={SignupPage} />
+      <Route path="/b/:slug" component={BookingStorePage} />
       <Route path="/onboarding">
         <ProtectedOnboarding><OnboardingPage /></ProtectedOnboarding>
       </Route>
@@ -120,7 +126,7 @@ function Router() {
         <ProtectedDashboard><AnalyticsPage /></ProtectedDashboard>
       </Route>
 
-      <Route path="/:slug" component={BookingStorePage} />
+      <Route path="/:slug" component={LegacySlugRedirect} />
       <Route component={NotFound} />
     </Switch>
   );

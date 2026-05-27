@@ -1,4 +1,5 @@
 import { Router, type Request, type Response } from "express";
+import crypto from "crypto";
 import { getInsforgeAdmin } from "../lib/insforge.js";
 
 const router = Router();
@@ -175,6 +176,48 @@ router.post("/payments/callback", async (req: Request, res: Response) => {
   }
 
   res.json({ received: true });
+});
+
+// Paystack webhook handler (verifies `x-paystack-signature` HMAC)
+router.post("/payments/paystack-webhook", async (req: Request, res: Response) => {
+  try {
+    const signature = (req.headers["x-paystack-signature"] ?? "") as string;
+
+    // Express's json middleware has already parsed the body. We verify signature
+    // against the raw JSON text when possible, falling back to stringified body.
+    const raw = (req as any).rawBody ?? JSON.stringify(req.body);
+
+    const secret = process.env.PAYSTACK_SECRET ?? "";
+    if (!secret) {
+      res.status(500).json({ success: false, message: "PAYSTACK_SECRET not configured" });
+      return;
+    }
+
+    const computed = crypto.createHmac("sha512", secret).update(raw).digest("hex");
+    if (!signature || computed !== signature) {
+      res.status(400).json({ success: false, message: "invalid signature" });
+      return;
+    }
+
+    const payload = req.body as any;
+    const event = payload.event;
+    const reference = payload.data?.reference ?? payload.data?.metadata?.reference;
+
+    if (reference) {
+      const db = getInsforgeAdmin();
+      if (event === "charge.success" || event === "payment.success") {
+        await db.database.from("payments").update({ status: "success", callback_payload: payload, updated_at: new Date().toISOString() }).eq("reference", reference);
+      } else if (event === "charge.failed" || event === "payment.failed") {
+        await db.database.from("payments").update({ status: "failed", callback_payload: payload, updated_at: new Date().toISOString() }).eq("reference", reference);
+      } else {
+        await db.database.from("payments").update({ callback_payload: payload, updated_at: new Date().toISOString() }).eq("reference", reference);
+      }
+    }
+
+    res.json({ received: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: String(err) });
+  }
 });
 
 export default router;

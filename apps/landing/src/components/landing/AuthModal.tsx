@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
+import { ROUTES } from "@/lib/routes";
 
 interface AuthModalProps {
   open: boolean;
@@ -36,11 +37,15 @@ export function AuthModal({ open, onClose, defaultTab = "signin" }: AuthModalPro
     setError("");
   }
 
-  function handleClose() {
+  function resetAuthState() {
     setStep("form");
     setOtp("");
     setError("");
     setResetToken("");
+  }
+
+  function handleClose() {
+    resetAuthState();
     onClose();
   }
 
@@ -59,8 +64,8 @@ export function AuthModal({ open, onClose, defaultTab = "signin" }: AuthModalPro
       if (tab === "signin") {
         const { error: err } = await signIn(form.email, form.password);
         if (err) { setError(err); return; }
-        handleClose();
-        navigate("/dashboard");
+        resetAuthState();
+        navigate(ROUTES.dashboard.home);
       } else {
         const { error: err, requiresVerification } = await signUp(form.email, form.password, form.businessName);
         if (err) { setError(err); return; }
@@ -68,8 +73,8 @@ export function AuthModal({ open, onClose, defaultTab = "signin" }: AuthModalPro
           setPendingEmail(form.email);
           setStep("verify");
         } else {
-          handleClose();
-          navigate("/onboarding");
+          resetAuthState();
+          navigate(ROUTES.onboarding);
         }
       }
     } finally {
@@ -85,8 +90,8 @@ export function AuthModal({ open, onClose, defaultTab = "signin" }: AuthModalPro
     try {
       const { error: err } = await verifyEmail(pendingEmail, otp.trim(), form.businessName);
       if (err) { setError(err); return; }
-      handleClose();
-      navigate("/onboarding");
+      resetAuthState();
+      navigate(ROUTES.onboarding);
     } finally {
       setLoading(false);
     }
@@ -136,8 +141,8 @@ export function AuthModal({ open, onClose, defaultTab = "signin" }: AuthModalPro
     try {
       const { error: err } = await resetPassword(form.password, resetToken);
       if (err) { setError(err); return; }
-      handleClose();
-      navigate("/dashboard");
+      resetAuthState();
+      navigate(ROUTES.dashboard.home);
     } finally {
       setLoading(false);
     }

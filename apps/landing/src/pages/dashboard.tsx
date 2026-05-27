@@ -17,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { useProfile } from "@/lib/profile";
 import { apiFetch } from "@/lib/api";
+import { publicBookingPath } from "@/lib/routes";
 
 type BookingStatus = "Confirmed" | "Pending" | "Cancelled";
 type Booking = {
@@ -59,7 +60,8 @@ export default function DashboardHome() {
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
   const greetingEmoji = hour < 12 ? "☀️" : hour < 17 ? "👋" : "🌙";
   const bookingSlug = profile?.slug ?? "your-business";
-  const bookingPageUrl = `https://nibook.noonstudio.africa/${bookingSlug}`;
+  const bookingPagePath = publicBookingPath(bookingSlug);
+  const bookingPageUrl = `${typeof window !== "undefined" ? window.location.origin : ""}${import.meta.env.BASE_URL?.replace(/\/$/, "") || ""}${bookingPagePath}`;
 
   const PLANS = [
     {

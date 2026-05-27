@@ -22,6 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { useProfile } from "@/lib/profile";
 import { uploadFile } from "@/lib/api";
+import { publicBookingPath } from "@/lib/routes";
 import { Loader2 } from "lucide-react";
 
 const themes = [
@@ -370,10 +371,10 @@ export default function SettingsPage() {
                 <div className="space-y-2">
                   <Label>Your booking link</Label>
                   <div className="flex items-center gap-2 p-3 bg-muted rounded-lg border text-sm">
-                    <span className="text-muted-foreground">nibook.noonstudio.africa/</span>
-                    <span className="font-semibold text-primary">{profile?.slug || "your-business"}</span>
+                    <span className="text-muted-foreground">nibook.noonstudio.africa</span>
+                    <span className="font-semibold text-primary">{profile?.slug ? publicBookingPath(profile.slug) : "/b/your-business"}</span>
                     <Button variant="ghost" size="icon" className="ml-auto h-7 w-7" onClick={() => {
-                      if (profile?.slug) window.open(`/${profile.slug}`, "_blank");
+                      if (profile?.slug) window.open(publicBookingPath(profile.slug), "_blank");
                     }}>
                       <ExternalLink className="w-3.5 h-3.5" />
                     </Button>
@@ -641,7 +642,7 @@ export default function SettingsPage() {
                 </CardContent>
               </Card>
             ) : (() => {
-              const bookingUrl = `${BASE_URL}/${profile.slug}`;
+              const bookingUrl = `${BASE_URL}${publicBookingPath(profile.slug)}`;
               const selectedThemeData = themes.find(t => t.id === selectedTheme) ?? themes[0];
               const iframeSnippet = `<!-- Nibook Booking Widget -->
 <iframe
@@ -777,7 +778,7 @@ export default function SettingsPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {profile?.slug ? (() => {
-                  const bookingUrl = `${BASE_URL}/${profile.slug}`;
+                  const bookingUrl = `${BASE_URL}${publicBookingPath(profile.slug)}`;
                   const waText = encodeURIComponent(`Book an appointment with ${profile.business_name ?? "us"}: ${bookingUrl}`);
                   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(bookingUrl)}&bgcolor=ffffff&color=0f172a&margin=12`;
 

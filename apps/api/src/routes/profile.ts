@@ -6,6 +6,19 @@ const router = Router();
 
 router.get("/profile/:id", async (req: Request, res: Response) => {
   const { id } = req.params;
+  const authHeader = req.headers.authorization;
+  const userToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+
+  if (!userToken) {
+    res.status(401).json({ error: "Authorization required" });
+    return;
+  }
+  const tokenUserId = decodeJwtSub(userToken);
+  if (!tokenUserId || tokenUserId !== id) {
+    res.status(403).json({ error: "Cannot view another user's profile" });
+    return;
+  }
+
   try {
     const db = getInsforgeAdmin();
     const { data, error } = await db.database.from("profiles").select("*").eq("id", id).single();

@@ -74,12 +74,23 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       return { error: null };
     }
 
+    const { data: insertData, error: insertError } = await insforge.database
+      .from("profiles")
+      .insert({ id: user.id, ...updates })
+      .select()
+      .single();
+
+    if (!insertError && insertData) {
+      setProfile(insertData as Profile);
+      return { error: null };
+    }
+
     const { data, error } = await apiFetch<{ data: Profile }>(`/profile/${user.id}`, {
       method: "PATCH",
       body: JSON.stringify(updates),
     });
     if (!error && data?.data) setProfile(data.data);
-    return { error: error ?? (sdkError as { message?: string })?.message ?? "Failed to save profile" };
+    return { error: error ?? insertError?.message ?? (sdkError as { message?: string })?.message ?? "Failed to save profile" };
   }
 
   return (

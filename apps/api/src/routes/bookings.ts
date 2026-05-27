@@ -1,17 +1,29 @@
 import { Router, type Request, type Response } from "express";
 import { getInsforgeAdmin } from "../lib/insforge.js";
 import { syncBookingToCalendar } from "./integrations.js";
+import { decodeJwtSub } from "../lib/jwt.js";
 
 const router = Router();
 
 router.get("/bookings", async (req: Request, res: Response) => {
   const { owner_id, status, limit = "100", offset = "0", from, to } = req.query as Record<string, string>;
   if (!owner_id) { res.status(400).json({ error: "owner_id required" }); return; }
+
+  const authHeader = req.headers.authorization;
+  const userToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  const tokenUserId = userToken ? decodeJwtSub(userToken) : null;
+  const isOwner = tokenUserId === owner_id;
+
   try {
     const db = getInsforgeAdmin();
+    // If authenticated owner, return all fields. Otherwise, return only anonymized schedule columns.
+    const selectFields = isOwner 
+      ? "*, services(name, price)" 
+      : "id, scheduled_at, duration_minutes, status, owner_id";
+
     let q = db.database
       .from("bookings")
-      .select("*, services(name, price)")
+      .select(selectFields)
       .eq("owner_id", owner_id)
       .order("scheduled_at", { ascending: false })
       .range(Number(offset), Number(offset) + Number(limit) - 1);
@@ -79,10 +91,17 @@ router.post("/bookings", async (req: Request, res: Response) => {
 router.patch("/bookings/:id", async (req: Request, res: Response) => {
   const { id } = req.params;
   const updates = req.body as Record<string, unknown>;
+
+  const authHeader = req.headers.authorization;
+  const userToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  if (!userToken) { res.status(401).json({ error: "Authorization required" }); return; }
+  const userId = decodeJwtSub(userToken);
+  if (!userId) { res.status(401).json({ error: "Invalid token" }); return; }
+
   try {
     const db = getInsforgeAdmin();
     const { data, error } = await db.database
-      .from("bookings").update(updates).eq("id", id).select().single();
+      .from("bookings").update(updates).eq("id", id).eq("owner_id", userId).select().single();
     if (error) { res.status(500).json({ error: error.message }); return; }
     res.json({ data });
   } catch (err) {
@@ -92,9 +111,16 @@ router.patch("/bookings/:id", async (req: Request, res: Response) => {
 
 router.delete("/bookings/:id", async (req: Request, res: Response) => {
   const { id } = req.params;
+
+  const authHeader = req.headers.authorization;
+  const userToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  if (!userToken) { res.status(401).json({ error: "Authorization required" }); return; }
+  const userId = decodeJwtSub(userToken);
+  if (!userId) { res.status(401).json({ error: "Invalid token" }); return; }
+
   try {
     const db = getInsforgeAdmin();
-    const { error } = await db.database.from("bookings").delete().eq("id", id);
+    const { error } = await db.database.from("bookings").delete().eq("id", id).eq("owner_id", userId);
     if (error) { res.status(500).json({ error: error.message }); return; }
     res.json({ success: true });
   } catch (err) {

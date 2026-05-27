@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useSeo } from "@/hooks/use-seo";
 import { apiFetch } from "@/lib/api";
+import { publicBookingPath } from "@/lib/routes";
 import {
   MapPin, Clock, Phone, MessageSquare, ChevronRight,
   Calendar, Scissors, Check, ArrowLeft, Share2, Heart, Loader2,
@@ -169,7 +170,7 @@ export default function BookingStorePage() {
       ? `Book an appointment with ${business.business_name} on Nibook. Easy online booking, no app download needed.`
       : "Book appointments with the best service businesses in Kenya.",
     image: business?.logo_url ?? business?.cover_url ?? undefined,
-    url: business ? `/${business.slug}` : undefined,
+    url: business ? publicBookingPath(business.slug) : undefined,
     type: "profile",
   });
 

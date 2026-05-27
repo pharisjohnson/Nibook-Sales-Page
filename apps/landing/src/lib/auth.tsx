@@ -82,10 +82,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (name) setPendingBusinessName(name);
 
     if (data?.user && token) {
-      setUser(data.user);
       setSession({ id: data.user.id, email: data.user.email ?? "" }, token);
       insforge.setAccessToken(token);
       await persistSignupBusinessName(data.user.id, name);
+      setUser(data.user);
       identifyUser(data.user.id, data.user.email ?? "", name);
       track.signedUp();
     }
@@ -97,7 +97,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data, error } = await insforge.auth.verifyEmail({ email, otp });
     if (error) return { error: (error as any).message ?? "Verification failed" };
     if (data?.user) {
-      setUser(data.user);
       const raw = data as any;
       const sessionToken = data.accessToken ?? raw?.session?.access_token ?? raw?.access_token ?? null;
       if (sessionToken) {
@@ -105,6 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         insforge.setAccessToken(sessionToken);
       }
       await persistSignupBusinessName(data.user.id, businessName ?? "");
+      setUser(data.user);
       track.signedUp();
     }
     return { error: null };
@@ -120,13 +120,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data, error } = await insforge.auth.signInWithPassword({ email, password });
     if (error) return { error: (error as any).message ?? "Sign in failed" };
     if (data?.user) {
-      setUser(data.user);
       const raw = data as any;
       const token = raw?.session?.access_token ?? raw?.access_token ?? null;
       if (token) {
         insforge.setAccessToken(token);
         setSession({ id: data.user.id, email: data.user.email ?? "" }, token);
       }
+      setUser(data.user);
       identifyUser(data.user.id, data.user.email ?? "");
       track.signedIn();
     }

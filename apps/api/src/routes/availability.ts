@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { getInsforgeAdmin } from "../lib/insforge.js";
+import { decodeJwtSub } from "../lib/jwt.js";
 
 const router = Router();
 
@@ -26,6 +27,13 @@ router.put("/availability/:owner_id/schedule", async (req: Request, res: Respons
   const { owner_id } = req.params;
   const { schedule } = req.body as { schedule: Array<{ day_name: string; is_active: boolean; start_time: string; end_time: string; sort_order: number }> };
   if (!schedule) { res.status(400).json({ error: "schedule required" }); return; }
+
+  const authHeader = req.headers.authorization;
+  const userToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  if (!userToken) { res.status(401).json({ error: "Authorization required" }); return; }
+  const userId = decodeJwtSub(userToken);
+  if (!userId || userId !== owner_id) { res.status(403).json({ error: "Cannot modify another user's availability" }); return; }
+
   try {
     const db = getInsforgeAdmin();
     await db.database.from("availability_schedules").delete().eq("owner_id", owner_id);
@@ -43,6 +51,13 @@ router.post("/availability/:owner_id/blackouts", async (req: Request, res: Respo
   const { owner_id } = req.params;
   const { date, reason } = req.body as { date: string; reason?: string };
   if (!date) { res.status(400).json({ error: "date required" }); return; }
+
+  const authHeader = req.headers.authorization;
+  const userToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  if (!userToken) { res.status(401).json({ error: "Authorization required" }); return; }
+  const userId = decodeJwtSub(userToken);
+  if (!userId || userId !== owner_id) { res.status(403).json({ error: "Cannot modify another user's availability" }); return; }
+
   try {
     const db = getInsforgeAdmin();
     const { data, error } = await db.database
@@ -57,10 +72,17 @@ router.post("/availability/:owner_id/blackouts", async (req: Request, res: Respo
 });
 
 router.delete("/availability/:owner_id/blackouts/:id", async (req: Request, res: Response) => {
-  const { id } = req.params;
+  const { owner_id, id } = req.params;
+
+  const authHeader = req.headers.authorization;
+  const userToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  if (!userToken) { res.status(401).json({ error: "Authorization required" }); return; }
+  const userId = decodeJwtSub(userToken);
+  if (!userId || userId !== owner_id) { res.status(403).json({ error: "Cannot modify another user's availability" }); return; }
+
   try {
     const db = getInsforgeAdmin();
-    const { error } = await db.database.from("availability_blackouts").delete().eq("id", id);
+    const { error } = await db.database.from("availability_blackouts").delete().eq("id", id).eq("owner_id", owner_id);
     if (error) { res.status(500).json({ error: error.message }); return; }
     res.json({ success: true });
   } catch (err) {
@@ -71,17 +93,12 @@ router.delete("/availability/:owner_id/blackouts/:id", async (req: Request, res:
 router.put("/availability/:owner_id/rules", async (req: Request, res: Response) => {
   const { owner_id } = req.params;
   const rules = req.body as Record<string, unknown>;
+
+  const authHeader = req.headers.authorization;
+  const userToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  if (!userToken) { res.status(401).json({ error: "Authorization required" }); return; }
+  const userId = decodeJwtSub(userToken);
+  if (!userId || userId !== owner_id) { res.status(403).json({ error: "Cannot modify another user's availability" }); return; }
+
   try {
     const db = getInsforgeAdmin();
-    const { data: existing } = await db.database.from("availability_rules").select("id").eq("owner_id", owner_id).single();
-    const { error } = existing
-      ? await db.database.from("availability_rules").update(rules).eq("owner_id", owner_id)
-      : await db.database.from("availability_rules").insert({ ...rules, owner_id });
-    if (error) { res.status(500).json({ error: error.message }); return; }
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-export default router;

@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { getInsforgeAdmin } from "../lib/insforge.js";
+import { decodeJwtSub } from "../lib/jwt.js";
 
 const router = Router();
 
@@ -19,6 +20,13 @@ router.get("/services", async (req: Request, res: Response) => {
 router.post("/services", async (req: Request, res: Response) => {
   const { owner_id, name, price, duration_minutes, image_url, is_active, description } = req.body as Record<string, unknown>;
   if (!owner_id || !name) { res.status(400).json({ error: "owner_id and name required" }); return; }
+
+  const authHeader = req.headers.authorization;
+  const userToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  if (!userToken) { res.status(401).json({ error: "Authorization required" }); return; }
+  const userId = decodeJwtSub(userToken);
+  if (!userId || userId !== owner_id) { res.status(403).json({ error: "Cannot create service for another user" }); return; }
+
   try {
     const { data, error } = await getInsforgeAdmin().database
       .from("services")
@@ -34,9 +42,16 @@ router.post("/services", async (req: Request, res: Response) => {
 router.patch("/services/:id", async (req: Request, res: Response) => {
   const { id } = req.params;
   const updates = req.body as Record<string, unknown>;
+
+  const authHeader = req.headers.authorization;
+  const userToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  if (!userToken) { res.status(401).json({ error: "Authorization required" }); return; }
+  const userId = decodeJwtSub(userToken);
+  if (!userId) { res.status(401).json({ error: "Invalid token" }); return; }
+
   try {
     const { data, error } = await getInsforgeAdmin().database
-      .from("services").update(updates).eq("id", id).select().single();
+      .from("services").update(updates).eq("id", id).eq("owner_id", userId).select().single();
     if (error) { res.status(500).json({ error: error.message }); return; }
     res.json({ data });
   } catch (err) {
@@ -46,8 +61,15 @@ router.patch("/services/:id", async (req: Request, res: Response) => {
 
 router.delete("/services/:id", async (req: Request, res: Response) => {
   const { id } = req.params;
+
+  const authHeader = req.headers.authorization;
+  const userToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  if (!userToken) { res.status(401).json({ error: "Authorization required" }); return; }
+  const userId = decodeJwtSub(userToken);
+  if (!userId) { res.status(401).json({ error: "Invalid token" }); return; }
+
   try {
-    const { error } = await getInsforgeAdmin().database.from("services").delete().eq("id", id);
+    const { error } = await getInsforgeAdmin().database.from("services").delete().eq("id", id).eq("owner_id", userId);
     if (error) { res.status(500).json({ error: error.message }); return; }
     res.json({ success: true });
   } catch (err) {
