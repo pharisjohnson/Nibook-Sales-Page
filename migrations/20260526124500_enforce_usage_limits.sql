@@ -9,18 +9,15 @@ declare
 begin
   select plan into v_plan from public.profiles where id = p_owner;
   if v_plan is null then
-    -- if profile missing, deny by default
     return false;
   end if;
 
-  -- premium = unlimited
-  if lower(v_plan) = 'premium' then
+  if lower(v_plan) in ('starter', 'premium') then
     return true;
   end if;
 
   select count(*) into v_count from public.services where owner_id = p_owner;
 
-  -- Non-premium plans limited to 3 services by default
   if v_count >= 3 then
     return false;
   end if;
@@ -48,9 +45,14 @@ begin
 
   select count(*) into v_count from public.bookings where owner_id = p_owner and scheduled_at >= v_month_start and scheduled_at < v_month_end;
 
-  -- Non-premium plans limited to 10 bookings per calendar month
-  if v_count >= 10 then
-    return false;
+  if lower(v_plan) = 'starter' then
+    if v_count >= 100 then
+      return false;
+    end if;
+  else
+    if v_count >= 10 then
+      return false;
+    end if;
   end if;
 
   return true;

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,18 +13,43 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from "@/components/ui/dialog";
+import {
   Palette, MessageSquare, Link2, CreditCard, HelpCircle, Save,
   Check, Phone, Building2, Smartphone, Wallet, ExternalLink,
   Code2, FileText, Copy, Eye, EyeOff, Camera, ImagePlus, Trash2,
   Share2, QrCode, Instagram, Facebook, Globe, AlertCircle,
-  Bot, Lock, RefreshCw,
+  Bot, Lock, RefreshCw, Crown, AlertTriangle, UserX, RotateCcw,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { useProfile } from "@/lib/profile";
-import { uploadFile } from "@/lib/api";
-import { publicBookingPath } from "@/lib/routes";
+import { apiFetch, uploadFile } from "@/lib/api";
+import { publicBookingPath, ROUTES } from "@/lib/routes";
 import { Loader2 } from "lucide-react";
+
+function PlanGate({ plan, required, children }: { plan: string | null; required: string[]; children: React.ReactNode }) {
+  const isAllowed = required.includes(plan ?? "");
+  if (isAllowed) return <>{children}</>;
+  return (
+    <div className="relative">
+      <div className="absolute inset-0 z-10 bg-background/80 backdrop-blur-sm flex flex-col items-center justify-center gap-3 rounded-xl min-h-[160px]">
+        <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center">
+          <Lock className="w-5 h-5 text-amber-600" />
+        </div>
+        <div className="text-center px-6">
+          <p className="font-semibold text-sm">{required.includes("premium") ? "Premium plan required" : "Starter or Premium plan required"}</p>
+          <p className="text-xs text-muted-foreground mt-1">Upgrade your plan to access this feature.</p>
+        </div>
+        <Button size="sm" className="gap-1.5" onClick={() => window.location.href = ROUTES.upgrade}>
+          Upgrade plan
+        </Button>
+      </div>
+      <div className="opacity-30 pointer-events-none">{children}</div>
+    </div>
+  );
+}
 
 const themes = [
   { id: "classic", name: "Classic", primary: "#0066CC", bg: "#FFFFFF" },
@@ -45,8 +71,9 @@ const BASE_URL = "https://nibook.noonstudio.africa";
 
 export default function SettingsPage() {
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const { profile, updateProfile, refresh: refreshProfile } = useProfile();
+  const [, navigate] = useLocation();
   const [selectedTheme, setSelectedTheme] = useState("classic");
   const [hasChanges, setHasChanges] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -68,6 +95,7 @@ export default function SettingsPage() {
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [policyText, setPolicyText] = useState("Cancellations made less than 24 hours before your appointment are non-refundable. No-shows will be charged the full service fee. To reschedule, please contact us at least 4 hours in advance.");
   const [showPolicy, setShowPolicy] = useState(true);
+  const [showPolicySaved, setShowPolicySaved] = useState(true);
   const [widgetTheme, setWidgetTheme] = useState<"light" | "dark">("light");
   const [embedType, setEmbedType] = useState<"iframe" | "button">("iframe");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -78,6 +106,16 @@ export default function SettingsPage() {
   const [generatingKey, setGeneratingKey] = useState(false);
   const [mcpConfigTab, setMcpConfigTab] = useState<"web" | "desktop" | "code">("web");
   const [webhookUrl, setWebhookUrl] = useState("");
+  const [supportChannel, setSupportChannel] = useState("email");
+  const [supportEmail, setSupportEmail] = useState("");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [payoutMobile, setPayoutMobile] = useState("");
+  const [payoutBankName, setPayoutBankName] = useState("");
+  const [payoutBankAccount, setPayoutBankAccount] = useState("");
+  const [payoutAccountName, setPayoutAccountName] = useState("");
 
   useEffect(() => {
     if (profile) {
@@ -94,6 +132,16 @@ export default function SettingsPage() {
       if (profile.cancellation_policy) setPolicyText(profile.cancellation_policy);
       if (profile.booking_widget_theme) setSelectedTheme(profile.booking_widget_theme);
       setWebhookUrl(profile.webhook_url ?? "");
+      if (profile.show_cancellation_policy !== undefined) {
+        setShowPolicy(profile.show_cancellation_policy);
+        setShowPolicySaved(profile.show_cancellation_policy);
+      }
+      if (profile.support_channel) setSupportChannel(profile.support_channel);
+      if (profile.support_email) setSupportEmail(profile.support_email);
+      setPayoutMobile(profile.payout_mobile ?? "");
+      setPayoutBankName(profile.payout_bank_name ?? "");
+      setPayoutBankAccount(profile.payout_bank_account ?? "");
+      setPayoutAccountName(profile.payout_account_name ?? "");
     }
     if (user) {
       setBusinessEmail(user.email ?? "");
@@ -219,12 +267,20 @@ export default function SettingsPage() {
       cancellation_policy: policyText.trim() || null,
       booking_widget_theme: selectedTheme || null,
       webhook_url: webhookUrl.trim() || null,
+      show_cancellation_policy: showPolicy,
+      support_channel: supportChannel,
+      support_email: supportEmail.trim() || null,
+      payout_mobile: payoutMobile.trim() || null,
+      payout_bank_name: payoutBankName.trim() || null,
+      payout_bank_account: payoutBankAccount.trim() || null,
+      payout_account_name: payoutAccountName.trim() || null,
     });
     setSaving(false);
     if (error && !error.includes("duplicate")) {
       toast({ title: "Error saving", description: error, variant: "destructive" });
       return;
     }
+    setShowPolicySaved(showPolicy);
     setHasChanges(false);
     toast({ title: "Settings saved", description: "Your changes have been saved successfully." });
   };
@@ -254,7 +310,8 @@ export default function SettingsPage() {
           <TabsTrigger value="policy" className="gap-1.5 text-xs sm:text-sm"><FileText className="w-3.5 h-3.5" />Policy</TabsTrigger>
           <TabsTrigger value="widget" className="gap-1.5 text-xs sm:text-sm"><Code2 className="w-3.5 h-3.5" />Widget</TabsTrigger>
           <TabsTrigger value="connections" className="gap-1.5 text-xs sm:text-sm"><Link2 className="w-3.5 h-3.5" />Connections</TabsTrigger>
-          <TabsTrigger value="support" className="gap-1.5 text-xs sm:text-sm"><HelpCircle className="w-3.5 h-3.5" />Support</TabsTrigger>
+          <TabsTrigger value="billing" className="gap-1.5 text-xs sm:text-sm"><Crown className="w-3.5 h-3.5" />Plan</TabsTrigger>
+          <TabsTrigger value="account" className="gap-1.5 text-xs sm:text-sm"><UserX className="w-3.5 h-3.5" />Account</TabsTrigger>
         </TabsList>
 
         <TabsContent value="business">
@@ -477,8 +534,8 @@ export default function SettingsPage() {
                   <Label className="text-xs">M-Pesa number (preferred)</Label>
                   <Input
                     placeholder="+254 7xx xxx xxx"
-                    value={profile?.payout_mobile ?? ""}
-                    onChange={e => { updateProfile({ payout_mobile: e.target.value }); setHasChanges(true); }}
+                    value={payoutMobile}
+                    onChange={e => { setPayoutMobile(e.target.value); setHasChanges(true); }}
                     className="h-8 text-sm"
                   />
                 </div>
@@ -492,8 +549,8 @@ export default function SettingsPage() {
                     <Label className="text-xs">Bank name</Label>
                     <Input
                       placeholder="e.g. Equity Bank"
-                      value={profile?.payout_bank_name ?? ""}
-                      onChange={e => { updateProfile({ payout_bank_name: e.target.value }); setHasChanges(true); }}
+                      value={payoutBankName}
+                      onChange={e => { setPayoutBankName(e.target.value); setHasChanges(true); }}
                       className="h-8 text-sm"
                     />
                   </div>
@@ -501,8 +558,8 @@ export default function SettingsPage() {
                     <Label className="text-xs">Account number</Label>
                     <Input
                       placeholder="e.g. 0011547896523"
-                      value={profile?.payout_bank_account ?? ""}
-                      onChange={e => { updateProfile({ payout_bank_account: e.target.value }); setHasChanges(true); }}
+                      value={payoutBankAccount}
+                      onChange={e => { setPayoutBankAccount(e.target.value); setHasChanges(true); }}
                       className="h-8 text-sm"
                     />
                   </div>
@@ -510,8 +567,8 @@ export default function SettingsPage() {
                     <Label className="text-xs">Account holder name</Label>
                     <Input
                       placeholder="As it appears on the account"
-                      value={profile?.payout_account_name ?? ""}
-                      onChange={e => { updateProfile({ payout_account_name: e.target.value }); setHasChanges(true); }}
+                      value={payoutAccountName}
+                      onChange={e => { setPayoutAccountName(e.target.value); setHasChanges(true); }}
                       className="h-8 text-sm"
                     />
                   </div>
@@ -526,6 +583,7 @@ export default function SettingsPage() {
 
         <TabsContent value="whatsapp">
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+            <PlanGate plan={profile?.plan ?? null} required={["starter", "premium"]}>
             <Card className="shadow-sm">
               <CardHeader>
                 <CardTitle>WhatsApp Notifications</CardTitle>
@@ -535,7 +593,7 @@ export default function SettingsPage() {
                 <div className="flex items-center justify-between p-4 bg-muted/40 rounded-xl">
                   <div>
                     <p className="font-medium">Enable WhatsApp notifications</p>
-                    <p className="text-sm text-muted-foreground">Requires Pro plan</p>
+                    <p className="text-sm text-muted-foreground">Available on Starter & Premium plans</p>
                   </div>
                   <Switch
                     checked={whatsappEnabled}
@@ -577,6 +635,7 @@ export default function SettingsPage() {
                 </div>
               </CardContent>
             </Card>
+            </PlanGate>
           </motion.div>
         </TabsContent>
 
@@ -634,6 +693,7 @@ export default function SettingsPage() {
         {/* ── Embeddable Widget ── */}
         <TabsContent value="widget">
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+            <PlanGate plan={profile?.plan ?? null} required={["starter", "premium"]}>
             {!profile?.slug ? (
               <Card className="shadow-sm">
                 <CardContent className="p-8 text-center space-y-3">
@@ -768,6 +828,7 @@ export default function SettingsPage() {
                 </Card>
               );
             })()}
+            </PlanGate>
           </motion.div>
         </TabsContent>
 
@@ -1022,7 +1083,7 @@ export default function SettingsPage() {
                         <p className="font-semibold text-sm">Starter or Premium plan required</p>
                         <p className="text-xs text-muted-foreground mt-1">Upgrade to connect Claude AI to your Nibook business.</p>
                       </div>
-                      <Button size="sm" className="gap-1.5" onClick={() => window.location.href = "/billing"}>
+                      <Button size="sm" className="gap-1.5" onClick={() => window.location.href = ROUTES.upgrade}>
                         Upgrade plan
                       </Button>
                     </div>
@@ -1170,6 +1231,7 @@ export default function SettingsPage() {
             })()}
 
             {/* Webhook / API */}
+            <PlanGate plan={profile?.plan ?? null} required={["starter", "premium"]}>
             <Card className="shadow-sm">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2"><Link2 className="w-4 h-4" />Webhook endpoint</CardTitle>
@@ -1207,20 +1269,79 @@ export default function SettingsPage() {
                 </div>
               </CardContent>
             </Card>
+             </PlanGate>
           </motion.div>
         </TabsContent>
 
-        <TabsContent value="support">
-          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+        <TabsContent value="billing">
+          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
             <Card className="shadow-sm">
               <CardHeader>
-                <CardTitle>Support Preferences</CardTitle>
+                <CardTitle className="flex items-center gap-2"><Crown className="w-4 h-4" />Your Plan</CardTitle>
+                <CardDescription>Manage your subscription and billing.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="flex items-center justify-between p-4 bg-muted/40 rounded-xl">
+                  <div>
+                    <p className="font-semibold text-lg capitalize">{profile?.plan ?? "trial"}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {profile?.plan === "premium" ? "Unlimited services, bookings & team members"
+                        : profile?.plan === "starter" ? "Unlimited services, up to 100 bookings/month"
+                        : "7-day trial — limited features"}
+                    </p>
+                  </div>
+                  <Badge variant="outline" className={
+                    profile?.plan === "premium" ? "bg-violet-50 text-violet-700 border-violet-200"
+                    : profile?.plan === "starter" ? "bg-blue-50 text-blue-700 border-blue-200"
+                    : "bg-amber-50 text-amber-700 border-amber-200"
+                  }>
+                    {profile?.plan === "premium" ? "Premium" : profile?.plan === "starter" ? "Starter" : "Trial"}
+                  </Badge>
+                </div>
+
+                {(profile?.plan === "trial" || !profile?.plan) && (
+                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-medium text-amber-900">You're on the free trial</p>
+                        <p className="text-sm text-amber-700 mt-1">Upgrade to unlock unlimited services, more bookings, WhatsApp reminders, and team features.</p>
+                        <Button size="sm" className="mt-3 gap-1.5" onClick={() => window.location.href = ROUTES.upgrade}>
+                          Upgrade plan
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {profile?.plan !== "trial" && profile?.plan && (
+                  <div className="space-y-3">
+                    <Separator />
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="p-3 bg-muted/40 rounded-lg">
+                        <p className="text-xs text-muted-foreground mb-1">Subscription status</p>
+                        <p className="font-medium text-sm capitalize">{profile.subscription_status ?? "active"}</p>
+                      </div>
+                      <div className="p-3 bg-muted/40 rounded-lg">
+                        <p className="text-xs text-muted-foreground mb-1">Started</p>
+                        <p className="font-medium text-sm">{profile.subscription_started_at ? new Date(profile.subscription_started_at).toLocaleDateString() : "—"}</p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">To cancel your subscription, contact support at hello@nibook.africa.</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-base">Support Preferences</CardTitle>
                 <CardDescription>How would you like to reach us if you need help?</CardDescription>
               </CardHeader>
               <CardContent className="space-y-5">
                 <div className="space-y-2">
                   <Label>Preferred support channel</Label>
-                  <Select defaultValue="email" onValueChange={() => setHasChanges(true)}>
+                  <Select value={supportChannel} onValueChange={v => { setSupportChannel(v); setHasChanges(true); }}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -1233,18 +1354,156 @@ export default function SettingsPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="support-email">Support contact email</Label>
-                  <Input id="support-email" type="email" defaultValue="amina@example.com" onChange={() => setHasChanges(true)} />
+                  <Input id="support-email" type="email" placeholder="your@email.com" value={supportEmail} onChange={e => { setSupportEmail(e.target.value); setHasChanges(true); }} />
                 </div>
                 <Separator />
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="font-medium text-sm">Priority support</p>
-                    <p className="text-sm text-muted-foreground">Get responses within 2 hours — Pro feature</p>
+                    <p className="text-sm text-muted-foreground">Get responses within 2 hours</p>
                   </div>
-                  <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">Pro only</Badge>
+                  <Badge variant="outline" className={profile?.plan === "premium" ? "bg-green-50 text-green-700 border-green-200" : "bg-yellow-50 text-yellow-700 border-yellow-200"}>
+                    {profile?.plan === "premium" ? "Included" : "Premium only"}
+                  </Badge>
                 </div>
               </CardContent>
             </Card>
+          </motion.div>
+        </TabsContent>
+
+        <TabsContent value="account">
+          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+            <Card className="shadow-sm">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><RotateCcw className="w-4 h-4" />Reset Business Profile</CardTitle>
+                <CardDescription>Clear your business data and restart onboarding. Your account stays active.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
+                  <p className="font-medium">This will clear:</p>
+                  <ul className="mt-1 space-y-0.5 pl-4 list-disc">
+                    <li>Business name, phone, location, category</li>
+                    <li>All services and availability schedules</li>
+                    <li>Cover photo, logo, and branding</li>
+                  </ul>
+                  <p className="mt-2 font-medium">Your account, login, and subscription will not be affected.</p>
+                </div>
+                <Button
+                  variant="outline"
+                  className="gap-1.5 text-amber-700 border-amber-300 hover:bg-amber-50"
+                  onClick={() => { setResetDialogOpen(true); setDeleteConfirm(""); }}
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  Reset business profile
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-sm border-red-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-destructive"><UserX className="w-4 h-4" />Delete Account</CardTitle>
+                <CardDescription>Permanently delete your account and all associated data. This cannot be undone.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-800">
+                  <p className="font-medium flex items-center gap-1.5"><AlertTriangle className="w-4 h-4" />This action is permanent</p>
+                  <ul className="mt-1 space-y-0.5 pl-4 list-disc">
+                    <li>Your profile, services, bookings, and availability will be deleted</li>
+                    <li>Your login credentials will be removed</li>
+                    <li>Any active subscription will be cancelled</li>
+                    <li>Your booking page will become unavailable immediately</li>
+                  </ul>
+                </div>
+                <Button
+                  variant="destructive"
+                  className="gap-1.5"
+                  onClick={() => { setDeleteDialogOpen(true); setDeleteConfirm(""); }}
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Delete my account
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+              <DialogContent className="sm:max-w-sm">
+                <DialogHeader>
+                  <DialogTitle>Reset business profile?</DialogTitle>
+                  <DialogDescription>Type your business name to confirm. This will restart onboarding.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <Input
+                    placeholder={`Type "${profile?.business_name ?? "your business name"}" to confirm`}
+                    value={deleteConfirm}
+                    onChange={e => setDeleteConfirm(e.target.value)}
+                  />
+                  <div className="flex gap-3">
+                    <Button variant="outline" className="flex-1" onClick={() => setResetDialogOpen(false)}>Cancel</Button>
+                    <Button
+                      variant="outline"
+                      className="flex-1 text-amber-700 border-amber-300 hover:bg-amber-50"
+                      disabled={deleteConfirm !== (profile?.business_name ?? "") || deleting}
+                      onClick={async () => {
+                        setDeleting(true);
+                        await updateProfile({
+                          business_name: null, slug: null, phone: null, location: null, category: null,
+                          bio: null, logo_url: null, cover_url: null, avatar_url: null,
+                          onboarding_completed: false, mpesa_paybill: null, mpesa_account: null,
+                          whatsapp_enabled: false, whatsapp_phone: null, reminder_hours: 24,
+                          cancellation_policy: null, booking_widget_theme: null, webhook_url: null,
+                        });
+                        try {
+                          await apiFetch(`/services?owner_id=${user?.id}`, { method: "DELETE" });
+                        } catch {}
+                        setDeleting(false);
+                        setResetDialogOpen(false);
+                        window.location.href = ROUTES.onboarding;
+                      }}
+                    >
+                      {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                      Reset profile
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+              <DialogContent className="sm:max-w-sm">
+                <DialogHeader>
+                  <DialogTitle>Delete your account?</DialogTitle>
+                  <DialogDescription>Type DELETE to confirm. This cannot be undone.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <Input
+                    placeholder='Type "DELETE" to confirm'
+                    value={deleteConfirm}
+                    onChange={e => setDeleteConfirm(e.target.value)}
+                  />
+                  <div className="flex gap-3">
+                    <Button variant="outline" className="flex-1" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+                    <Button
+                      variant="destructive"
+                      className="flex-1"
+                      disabled={deleteConfirm !== "DELETE" || deleting}
+                      onClick={async () => {
+                        setDeleting(true);
+                        try {
+                          await apiFetch(`/profile/${user?.id}`, { method: "DELETE" });
+                        } catch {}
+                        await signOut();
+                        setDeleting(false);
+                        setDeleteDialogOpen(false);
+                        window.location.href = "/";
+                      }}
+                    >
+                      {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                      Delete account
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
           </motion.div>
         </TabsContent>
       </Tabs>

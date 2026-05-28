@@ -2,11 +2,13 @@ import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useProfile } from "@/lib/profile";
 
 type Status = "verifying" | "success" | "failed";
 
 export default function SubscriptionCallbackPage() {
   const [, navigate] = useLocation();
+  const { refresh: refreshProfile } = useProfile();
   const [status, setStatus] = useState<Status>("verifying");
   const [plan, setPlan] = useState<string | null>(null);
   const [message, setMessage] = useState("");
@@ -27,6 +29,7 @@ export default function SubscriptionCallbackPage() {
         if (data.success && data.paid) {
           setStatus("success");
           setPlan(data.plan ?? null);
+          refreshProfile();
         } else {
           setStatus("failed");
           setMessage(data.message ?? "Payment could not be confirmed.");

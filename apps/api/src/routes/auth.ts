@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { getInsforgeAdmin } from "../lib/insforge.js";
-import { decodeJwtSub } from "../lib/jwt.js";
+import { decodeJwtSub, decodeJwtPayload } from "../lib/jwt.js";
 
 const router = Router();
 
@@ -89,8 +89,10 @@ router.get("/auth/me", async (req: Request, res: Response) => {
     const userId = decodeJwtSub(token);
     if (!userId) { res.status(401).json({ error: "Invalid token" }); return; }
     const client = getInsforgeAdmin();
-    const { data } = await client.database.from("profiles").select("id, business_name").eq("id", userId).single();
-    res.json({ user: { id: userId, email: "", displayName: (data as any)?.business_name ?? null } });
+    const { data: profileData } = await client.database.from("profiles").select("id, business_name").eq("id", userId).single();
+    const jwtPayload = decodeJwtPayload(token);
+    const email = (jwtPayload?.email as string) ?? "";
+    res.json({ user: { id: userId, email, displayName: (profileData as any)?.business_name ?? null } });
   } catch {
     res.status(401).json({ error: "Invalid token" });
   }

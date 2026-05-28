@@ -30,6 +30,11 @@ export interface Profile {
   google_calendar_email: string | null;
   api_key: string | null;
   webhook_url: string | null;
+  show_cancellation_policy: boolean;
+  support_channel: string | null;
+  support_email: string | null;
+  subscription_status: string | null;
+  subscription_started_at: string | null;
   created_at: string;
 }
 
@@ -63,6 +68,15 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     const token = getStoredToken();
     if (token) insforge.setAccessToken(token);
 
+    const { data, error } = await apiFetch<{ data: Profile }>(`/profile/${user.id}`, {
+      method: "PATCH",
+      body: JSON.stringify(updates),
+    });
+    if (!error && data?.data) {
+      setProfile(data.data);
+      return { error: null };
+    }
+
     const { data: sdkData, error: sdkError } = await insforge.database
       .from("profiles")
       .update(updates)
@@ -86,12 +100,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       return { error: null };
     }
 
-    const { data, error } = await apiFetch<{ data: Profile }>(`/profile/${user.id}`, {
-      method: "PATCH",
-      body: JSON.stringify(updates),
-    });
-    if (!error && data?.data) setProfile(data.data);
-    return { error: error ?? insertError?.message ?? (sdkError as { message?: string })?.message ?? "Failed to save profile" };
+    return { error: error ?? (sdkError as { message?: string })?.message ?? insertError?.message ?? "Failed to save profile" };
   }
 
   return (

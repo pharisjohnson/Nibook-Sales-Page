@@ -52,7 +52,7 @@ router.patch("/profile/:id", async (req: Request, res: Response) => {
     "reminder_hours", "cancellation_policy", "booking_widget_theme",
     "payout_mobile", "payout_bank_name", "payout_bank_account", "payout_account_name",
     "google_refresh_token", "google_access_token", "google_token_expiry", "google_calendar_email",
-    "webhook_url",
+    "webhook_url", "show_cancellation_policy", "support_channel", "support_email",
   ];
   const safe = Object.fromEntries(Object.entries(updates).filter(([k]) => allowed.includes(k)));
 
@@ -87,6 +87,10 @@ router.patch("/profile/:id", async (req: Request, res: Response) => {
 
       if (!updateError && updated) return { data: updated, error: null };
 
+      if ((updateError as any)?.code !== "PGRST116") {
+        return { data: null, error: updateError };
+      }
+
       const { data: inserted, error: insertError } = await db.database
         .from("profiles")
         .insert({ id, ...safe })
@@ -96,7 +100,6 @@ router.patch("/profile/:id", async (req: Request, res: Response) => {
       return { data: inserted, error: insertError ?? updateError };
     }
 
-    // Prefer user JWT (RLS); fall back to server admin key if configured
     let { data, error } = await writeProfile(createUserClient(userToken));
     if (error) {
       ({ data, error } = await writeProfile(admin));
@@ -107,7 +110,8 @@ router.patch("/profile/:id", async (req: Request, res: Response) => {
         (error as { message?: string }).message ??
         (error as { details?: string }).details ??
         JSON.stringify(error);
-      res.status(500).json({ error: message });
+      const status = (error as { code?: string }).code === "42501" ? 403 : 500;
+      res.status(status).json({ error: message });
       return;
     }
     res.json({ data });
@@ -211,6 +215,56 @@ router.get("/analytics/:owner_id", async (req: Request, res: Response) => {
     rows.forEach((b: any) => { if (b.status in statusCounts) (statusCounts as any)[b.status]++; });
 
     res.json({ totalRevenue, totalBookings, completionRate, serviceStats, topClients, statusCounts, raw: rows });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+router.delete("/profile/:id", async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const authHeader = req.headers.authorization;
+  const userToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+
+  if (!userToken) {
+    res.status(401).json({ error: "Authorization required" });
+    return;
+  }
+  const tokenUserId = decodeJwtSub(userToken);
+  if (!tokenUserId || tokenUserId !== id) {
+    res.status(403).json({ error: "Cannot delete another user's profile" });
+    return;
+  }
+
+  try {
+    const admin = getInsforgeAdmin();
+    const { error } = await admin.database.from("profiles").delete().eq("id", id);
+    if (error) { res.status(500).json({ error: (error as any).message ?? "Delete failed" }); return; }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+router.delete("/services", async (req: Request, res: Response) => {
+  const { owner_id } = req.query as { owner_id?: string };
+  const authHeader = req.headers.authorization;
+  const userToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+
+  if (!userToken || !owner_id) {
+    res.status(401).json({ error: "Authorization and owner_id required" });
+    return;
+  }
+  const tokenUserId = decodeJwtSub(userToken);
+  if (!tokenUserId || tokenUserId !== owner_id) {
+    res.status(403).json({ error: "Cannot delete another user's services" });
+    return;
+  }
+
+  try {
+    const admin = getInsforgeAdmin();
+    const { error } = await admin.database.from("services").delete().eq("owner_id", owner_id);
+    if (error) { res.status(500).json({ error: (error as any).message ?? "Delete failed" }); return; }
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }

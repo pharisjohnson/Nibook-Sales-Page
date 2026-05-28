@@ -173,8 +173,18 @@ export default function OnboardingPage() {
   }
 
   async function saveStep2() {
-    setLoading(true);
     const validServices = services.filter(s => s.name.trim());
+    const isTrial = profile?.plan === "trial" || !profile?.plan;
+    const maxServices = isTrial ? 3 : Infinity;
+    if (validServices.length > maxServices) {
+      toast({
+        title: "Service limit reached",
+        description: `Trial plans can add up to ${maxServices} services. Upgrade for unlimited.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    setLoading(true);
     for (const svc of validServices) {
       await apiFetch("/services", {
         method: "POST",
@@ -391,10 +401,21 @@ export default function OnboardingPage() {
                 ))}
                 <button
                   type="button"
-                  onClick={addService}
+                  onClick={() => {
+                    const isTrial = profile?.plan === "trial" || !profile?.plan;
+                    const maxServices = isTrial ? 3 : Infinity;
+                    if (services.length >= maxServices) {
+                      toast({ title: "Trial limit", description: `Trial plans are limited to ${maxServices} services. Upgrade for unlimited.`, variant: "destructive" });
+                      return;
+                    }
+                    addService();
+                  }}
                   className="w-full flex items-center justify-center gap-2 text-sm text-primary border border-dashed border-primary/40 rounded-xl py-3 hover:border-primary hover:bg-primary/5 transition-all"
                 >
                   <Plus className="w-4 h-4" />Add another service
+                  {(!profile?.plan || profile.plan === "trial") && services.length >= 2 && (
+                    <span className="text-xs text-muted-foreground">({3 - services.length} remaining on trial)</span>
+                  )}
                 </button>
               </div>
 
