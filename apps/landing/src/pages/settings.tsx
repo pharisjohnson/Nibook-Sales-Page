@@ -77,6 +77,7 @@ export default function SettingsPage() {
   const [showApiKey, setShowApiKey] = useState(false);
   const [generatingKey, setGeneratingKey] = useState(false);
   const [mcpConfigTab, setMcpConfigTab] = useState<"web" | "desktop" | "code">("web");
+  const [webhookUrl, setWebhookUrl] = useState("");
 
   useEffect(() => {
     if (profile) {
@@ -92,6 +93,7 @@ export default function SettingsPage() {
       setReminderHours(String(profile.reminder_hours ?? "24"));
       if (profile.cancellation_policy) setPolicyText(profile.cancellation_policy);
       if (profile.booking_widget_theme) setSelectedTheme(profile.booking_widget_theme);
+      setWebhookUrl(profile.webhook_url ?? "");
     }
     if (user) {
       setBusinessEmail(user.email ?? "");
@@ -216,6 +218,7 @@ export default function SettingsPage() {
       reminder_hours: parseInt(reminderHours) || 24,
       cancellation_policy: policyText.trim() || null,
       booking_widget_theme: selectedTheme || null,
+      webhook_url: webhookUrl.trim() || null,
     });
     setSaving(false);
     if (error && !error.includes("duplicate")) {
@@ -1173,18 +1176,19 @@ export default function SettingsPage() {
                 <CardDescription>Receive a POST request to your own server whenever a booking is created, cancelled, or updated.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Your webhook URL</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="https://yoursite.com/webhooks/nibook"
-                      className="font-mono text-xs h-8"
-                      onChange={() => setHasChanges(true)}
-                    />
-                    <Button size="sm" variant="outline" className="shrink-0 h-8 text-xs">Save</Button>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Your webhook URL</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="https://yoursite.com/webhooks/nibook"
+                        value={webhookUrl}
+                        onChange={e => { setWebhookUrl(e.target.value); setHasChanges(true); }}
+                        className="font-mono text-xs h-8"
+                      />
+                      <Button size="sm" variant="outline" className="shrink-0 h-8 text-xs" onClick={handleSave}>Save</Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">We'll send a JSON payload with event type and booking details.</p>
                   </div>
-                  <p className="text-xs text-muted-foreground">We'll send a JSON payload with event type and booking details.</p>
-                </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Events sent</Label>
                   <div className="flex flex-wrap gap-2">

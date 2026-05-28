@@ -52,6 +52,7 @@ router.patch("/profile/:id", async (req: Request, res: Response) => {
     "reminder_hours", "cancellation_policy", "booking_widget_theme",
     "payout_mobile", "payout_bank_name", "payout_bank_account", "payout_account_name",
     "google_refresh_token", "google_access_token", "google_token_expiry", "google_calendar_email",
+    "webhook_url",
   ];
   const safe = Object.fromEntries(Object.entries(updates).filter(([k]) => allowed.includes(k)));
 

@@ -29,6 +29,7 @@ export interface Profile {
   payout_account_name: string | null;
   google_calendar_email: string | null;
   api_key: string | null;
+  webhook_url: string | null;
   created_at: string;
 }
 
