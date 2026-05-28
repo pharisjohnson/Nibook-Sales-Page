@@ -1012,7 +1012,7 @@ export default function SettingsPage() {
                 : null;
 
               return (
-                <Card className="shadow-sm relative overflow-hidden">
+                <Card className={`shadow-sm relative overflow-hidden ${!isPaying ? "min-h-[220px]" : ""}`}>
                   {!isPaying && (
                     <div className="absolute inset-0 z-10 bg-background/80 backdrop-blur-sm flex flex-col items-center justify-center gap-3 rounded-xl">
                       <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center">
