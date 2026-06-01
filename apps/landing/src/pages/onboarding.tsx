@@ -1,16 +1,16 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
 import {
   ArrowRight, ArrowLeft, Check, Loader2, Plus, Scissors, Clock, DollarSign,
-  Copy, ExternalLink, Calendar,
+  Copy, ExternalLink, Calendar, Camera, ImagePlus, Trash2,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth";
 import { useProfile } from "@/lib/profile";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, uploadFile } from "@/lib/api";
 import {
   getSignupBusinessName,
   clearPendingBusinessName,
@@ -34,7 +34,7 @@ const DEFAULT_CATEGORIES = [
   "Coaching & Consulting", "Other",
 ];
 
-type Service = { name: string; price: string; duration: string };
+type Service = { name: string; price: string; duration: string; image_url: string };
 
 const STEPS = ["Business", "Services", "Availability", "Launch"];
 
@@ -55,10 +55,18 @@ export default function OnboardingPage() {
   const [extraCategories, setExtraCategories] = useState<string[]>([]);
   const [savedSlug, setSavedSlug] = useState<string | null>(null);
 
-  const [services, setServices] = useState<Service[]>([{ name: "", price: "", duration: "60" }]);
+  const [services, setServices] = useState<Service[]>([{ name: "", price: "", duration: "60", image_url: "" }]);
   const [schedule, setSchedule] = useState<DaySchedule[]>(
     () => DEFAULT_WEEKLY_SCHEDULE.map(d => ({ ...d })),
   );
+
+  const [logoUrl, setLogoUrl] = useState("");
+  const [coverUrl, setCoverUrl] = useState("");
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
+  const serviceImageInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
     track.onboardingStarted();
@@ -72,7 +80,9 @@ export default function OnboardingPage() {
     if (profile?.location && !location) setLocation(profile.location);
     if (profile?.category && !category) setCategory(profile.category);
     if (profile?.slug) setSavedSlug(profile.slug);
-  }, [profile, user, bizName, phone, location, category]);
+    if (profile?.logo_url && !logoUrl) setLogoUrl(profile.logo_url);
+    if (profile?.cover_url && !coverUrl) setCoverUrl(profile.cover_url);
+  }, [profile, user, bizName, phone, location, category, logoUrl, coverUrl]);
 
   useEffect(() => {
     apiFetch<{ data: string[] }>("/categories").then(({ data }) => {
@@ -95,7 +105,7 @@ export default function OnboardingPage() {
     : null;
 
   function addService() {
-    setServices(s => [...s, { name: "", price: "", duration: "60" }]);
+    setServices(s => [...s, { name: "", price: "", duration: "60", image_url: "" }]);
   }
 
   function updateService(i: number, key: keyof Service, val: string) {
@@ -104,6 +114,43 @@ export default function OnboardingPage() {
 
   function removeService(i: number) {
     setServices(s => s.filter((_, idx) => idx !== i));
+  }
+
+  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingLogo(true);
+    const { url, error } = await uploadFile(file, "profiles");
+    setUploadingLogo(false);
+    if (error || !url) {
+      toast({ title: "Logo upload failed", description: error ?? "Try again", variant: "destructive" });
+      return;
+    }
+    setLogoUrl(url);
+  }
+
+  async function handleCoverUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingCover(true);
+    const { url, error } = await uploadFile(file, "profiles");
+    setUploadingCover(false);
+    if (error || !url) {
+      toast({ title: "Cover upload failed", description: error ?? "Try again", variant: "destructive" });
+      return;
+    }
+    setCoverUrl(url);
+  }
+
+  async function handleServiceImageUpload(index: number, e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const { url, error } = await uploadFile(file, "services");
+    if (error || !url) {
+      toast({ title: "Image upload failed", description: error ?? "Try again", variant: "destructive" });
+      return;
+    }
+    updateService(index, "image_url", url);
   }
 
   async function finishOnboarding(navigateTo: string) {
@@ -161,6 +208,8 @@ export default function OnboardingPage() {
       location: location.trim() || null,
       category: finalCategory,
       slug,
+      logo_url: logoUrl.trim() || null,
+      cover_url: coverUrl.trim() || null,
     });
     setLoading(false);
     if (error) {
@@ -193,6 +242,7 @@ export default function OnboardingPage() {
           name: svc.name.trim(),
           price: parseFloat(svc.price) || 0,
           duration_minutes: parseInt(svc.duration, 10) || 60,
+          image_url: svc.image_url.trim() || null,
           is_active: true,
         }),
       });
@@ -291,6 +341,76 @@ export default function OnboardingPage() {
                   )}
                 </div>
 
+                {/* Cover photo */}
+                <div className="space-y-1.5">
+                  <Label>Cover photo</Label>
+                  <div className="relative h-32 rounded-xl overflow-hidden border border-border bg-muted group">
+                    {coverUrl ? (
+                      <img src={coverUrl} alt="Cover" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-pink-500 via-rose-500 to-orange-400 flex items-center justify-center">
+                        <p className="text-white/70 text-sm font-medium">No cover photo</p>
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="gap-1 shadow"
+                        disabled={uploadingCover}
+                        onClick={() => coverInputRef.current?.click()}
+                      >
+                        {uploadingCover ? <Loader2 className="w-3 h-3 animate-spin" /> : <ImagePlus className="w-3 h-3" />}
+                        {coverUrl ? "Change" : "Upload"}
+                      </Button>
+                      {coverUrl && (
+                        <Button size="sm" variant="destructive" className="gap-1 shadow" onClick={() => setCoverUrl("")}>
+                          <Trash2 className="w-3 h-3" />Remove
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  <input ref={coverInputRef} type="file" accept="image/*" className="hidden" onChange={handleCoverUpload} />
+                  <p className="text-xs text-muted-foreground">Recommended: 1200×400px, JPG or PNG. Max 5 MB.</p>
+                </div>
+
+                {/* Logo */}
+                <div className="space-y-1.5">
+                  <Label>Business logo</Label>
+                  <div className="flex items-center gap-4">
+                    <div
+                      className="relative w-16 h-16 rounded-xl border-2 border-border overflow-hidden cursor-pointer group shrink-0"
+                      onClick={() => logoInputRef.current?.click()}
+                    >
+                      {logoUrl ? (
+                        <img src={logoUrl} alt="Logo" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center">
+                          <span className="text-white text-sm font-bold">
+                            {bizName.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase() || "B"}
+                          </span>
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <Camera className="w-4 h-4 text-white" />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Button variant="outline" size="sm" className="gap-1" disabled={uploadingLogo} onClick={() => logoInputRef.current?.click()}>
+                        {uploadingLogo ? <Loader2 className="w-3 h-3 animate-spin" /> : <ImagePlus className="w-3 h-3" />}
+                        {logoUrl ? "Change logo" : "Upload logo"}
+                      </Button>
+                      {logoUrl && (
+                        <Button variant="ghost" size="sm" className="gap-1 text-destructive hover:text-destructive block" onClick={() => setLogoUrl("")}>
+                          <Trash2 className="w-3 h-3 inline mr-1" />Remove
+                        </Button>
+                      )}
+                      <p className="text-xs text-muted-foreground">Square image, 400×400px recommended.</p>
+                    </div>
+                  </div>
+                  <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+                </div>
+
                 <div className="space-y-1.5">
                   <Label>Category</Label>
                   <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
@@ -386,6 +506,42 @@ export default function OnboardingPage() {
                     <div className="space-y-1.5">
                       <Label className="flex items-center gap-1.5"><Scissors className="w-3.5 h-3.5" />Service name</Label>
                       <Input placeholder="e.g. Hair Braiding" value={svc.name} onChange={e => updateService(i, "name", e.target.value)} />
+                    </div>
+                    {/* Service image */}
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="relative w-14 h-14 rounded-lg border border-border overflow-hidden cursor-pointer group shrink-0 bg-muted"
+                        onClick={() => serviceImageInputRefs.current[i]?.click()}
+                      >
+                        {svc.image_url ? (
+                          <img src={svc.image_url} alt="Service" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <ImagePlus className="w-5 h-5 text-muted-foreground" />
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <Camera className="w-3.5 h-3.5 text-white" />
+                        </div>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <Button variant="ghost" size="sm" className="gap-1 text-xs h-8 px-2" onClick={() => serviceImageInputRefs.current[i]?.click()}>
+                          <ImagePlus className="w-3 h-3" />
+                          {svc.image_url ? "Change image" : "Add image"}
+                        </Button>
+                        {svc.image_url && (
+                          <Button variant="ghost" size="sm" className="gap-1 text-xs h-8 px-2 text-destructive hover:text-destructive" onClick={() => updateService(i, "image_url", "")}>
+                            <Trash2 className="w-3 h-3" />Remove
+                          </Button>
+                        )}
+                      </div>
+                      <input
+                        ref={el => { serviceImageInputRefs.current[i] = el; }}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={e => handleServiceImageUpload(i, e)}
+                      />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
