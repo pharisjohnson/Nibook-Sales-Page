@@ -10,6 +10,7 @@ import { apiFetch } from "@/lib/api";
 import {
   Search, MapPin, Star, Clock, Scissors, Sparkles, Dumbbell,
   Heart, Camera, SlidersHorizontal, X, ArrowLeft, LayoutList, LayoutGrid, ImageIcon, ChevronRight, Loader2,
+  Calculator,
 } from "lucide-react";
 
 const categories = [
@@ -18,6 +19,7 @@ const categories = [
   { id: "Fitness & Gym", label: "Fitness", icon: Dumbbell },
   { id: "Spa & Wellness", label: "Wellness & Spa", icon: Heart },
   { id: "Photography", label: "Photography", icon: Camera },
+  { id: "Accounting", label: "Accounting", icon: Calculator },
 ];
 
 const GRADIENTS = [
@@ -73,6 +75,9 @@ function ListCard({ biz }: { biz: DirectoryBusiness }) {
                 <span className="text-[10px] px-2 py-0.5 bg-muted rounded-full text-muted-foreground">{biz.category}</span>
               </div>
             )}
+            {biz.bio && (
+              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{biz.bio}</p>
+            )}
           </div>
         </div>
       </motion.div>
@@ -100,6 +105,9 @@ function GridCard({ biz }: { biz: DirectoryBusiness }) {
           )}
           {biz.category && (
             <span className="text-[10px] px-2 py-0.5 bg-muted rounded-full text-muted-foreground w-fit">{biz.category}</span>
+          )}
+          {biz.bio && (
+            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{biz.bio}</p>
           )}
         </div>
         <div className="px-3 pb-3 border-t border-border/50 pt-2">

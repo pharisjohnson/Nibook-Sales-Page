@@ -165,7 +165,11 @@ export default function DashboardHome() {
 
   const confirmCancel = async () => {
     if (!cancelTarget) return;
-    await apiFetch(`/bookings/${cancelTarget.id}`, { method: "PATCH", body: JSON.stringify({ status: "cancelled" }) });
+    const { error } = await apiFetch(`/bookings/${cancelTarget.id}`, { method: "PATCH", body: JSON.stringify({ status: "cancelled" }) });
+    if (error) {
+      toast({ title: "Cancel failed", description: error, variant: "destructive" });
+      return;
+    }
     setBookings(prev => prev.map(b => b.id === cancelTarget.id ? { ...b, status: "Cancelled" } : b));
     toast({ title: "Booking cancelled", description: `${cancelTarget.client}'s booking has been cancelled.` });
     setCancelTarget(null);

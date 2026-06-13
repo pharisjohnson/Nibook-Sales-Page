@@ -297,7 +297,8 @@ export default function BookingStorePage() {
   };
 
   // ── Min date / max date for the date picker ─────────────────────────────────
-  const today = new Date().toISOString().split("T")[0];
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   const maxDate = (() => {
     const d = new Date();
     d.setDate(d.getDate() + (rules?.max_advance_days ?? 30));

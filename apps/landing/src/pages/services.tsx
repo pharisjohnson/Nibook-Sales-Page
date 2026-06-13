@@ -345,8 +345,10 @@ export default function ServicesPage() {
     if (!user) return;
     setLoadingServices(true);
     apiFetch<{ data: any[] }>(`/services?owner_id=${user.id}`)
-      .then(({ data: res }) => {
-        if (res?.data) {
+      .then(({ data: res, error }) => {
+        if (error) {
+          toast({ title: "Error loading services", description: error, variant: "destructive" });
+        } else if (res?.data) {
           setServices(res.data.map((s: any, i: number) => ({
             id: s.id,
             name: s.name,
@@ -360,7 +362,7 @@ export default function ServicesPage() {
           })));
         }
         setLoadingServices(false);
-      }).catch(() => setLoadingServices(false));
+      });
   }, [user]);
 
   const openAdd = () => {
@@ -430,7 +432,11 @@ export default function ServicesPage() {
 
   const deleteService = async (id: string) => {
     const svc = services.find(s => s.id === id);
-    await apiFetch(`/services/${id}`, { method: "DELETE" });
+    const { error } = await apiFetch(`/services/${id}`, { method: "DELETE" });
+    if (error) {
+      toast({ title: "Delete failed", description: error, variant: "destructive" });
+      return;
+    }
     setServices(services.filter(s => s.id !== id));
     toast({ title: "Service deleted", description: `"${svc?.name}" has been removed.` });
   };
@@ -439,7 +445,11 @@ export default function ServicesPage() {
     const svc = services.find(s => s.id === id);
     if (!svc) return;
     const newActive = !svc.active;
-    await apiFetch(`/services/${id}`, { method: "PATCH", body: JSON.stringify({ is_active: newActive }) });
+    const { error } = await apiFetch(`/services/${id}`, { method: "PATCH", body: JSON.stringify({ is_active: newActive }) });
+    if (error) {
+      toast({ title: "Update failed", description: error, variant: "destructive" });
+      return;
+    }
     setServices(services.map(s => s.id === id ? { ...s, active: newActive } : s));
   };
 

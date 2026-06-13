@@ -8,6 +8,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/lib/auth";
 import { useProfile } from "@/lib/profile";
 import { apiFetch, uploadFile } from "@/lib/api";
@@ -31,7 +32,7 @@ import { track } from "@/lib/analytics";
 const DEFAULT_CATEGORIES = [
   "Hair & Beauty", "Barbershop", "Spa & Wellness", "Fitness & Gym",
   "Photography", "Massage Therapy", "Nail Studio", "Tattoo & Piercing",
-  "Coaching & Consulting", "Other",
+  "Coaching & Consulting", "Accounting", "Other",
 ];
 
 type Service = { name: string; price: string; duration: string; image_url: string };
@@ -53,6 +54,7 @@ export default function OnboardingPage() {
   const [category, setCategory] = useState("");
   const [customCategory, setCustomCategory] = useState("");
   const [extraCategories, setExtraCategories] = useState<string[]>([]);
+  const [bio, setBio] = useState("");
   const [savedSlug, setSavedSlug] = useState<string | null>(null);
 
   const [services, setServices] = useState<Service[]>([{ name: "", price: "", duration: "60", image_url: "" }]);
@@ -73,16 +75,18 @@ export default function OnboardingPage() {
   }, []);
 
   useEffect(() => {
+    if (!profile && !user) return;
     const nameFromSignup =
       profile?.business_name?.trim() || getSignupBusinessName(user);
-    if (nameFromSignup && !bizName) setBizName(nameFromSignup);
-    if (profile?.phone && !phone) setPhone(profile.phone);
-    if (profile?.location && !location) setLocation(profile.location);
-    if (profile?.category && !category) setCategory(profile.category);
+    setBizName(prev => prev || nameFromSignup || "");
+    setPhone(prev => prev || profile?.phone || "");
+    setLocation(prev => prev || profile?.location || "");
+    setCategory(prev => prev || profile?.category || "");
+    setBio(prev => prev || profile?.bio || "");
     if (profile?.slug) setSavedSlug(profile.slug);
-    if (profile?.logo_url && !logoUrl) setLogoUrl(profile.logo_url);
-    if (profile?.cover_url && !coverUrl) setCoverUrl(profile.cover_url);
-  }, [profile, user, bizName, phone, location, category, logoUrl, coverUrl]);
+    setLogoUrl(prev => prev || profile?.logo_url || "");
+    setCoverUrl(prev => prev || profile?.cover_url || "");
+  }, [profile, user]);
 
   useEffect(() => {
     apiFetch<{ data: string[] }>("/categories").then(({ data }) => {
@@ -206,6 +210,7 @@ export default function OnboardingPage() {
       business_name: bizName.trim(),
       phone: phoneResult.e164 ?? (phone.trim() || null),
       location: location.trim() || null,
+      bio: bio.trim() || null,
       category: finalCategory,
       slug,
       logo_url: logoUrl.trim() || null,
@@ -234,8 +239,9 @@ export default function OnboardingPage() {
       return;
     }
     setLoading(true);
+    let errors: string[] = [];
     for (const svc of validServices) {
-      await apiFetch("/services", {
+      const { error } = await apiFetch("/services", {
         method: "POST",
         body: JSON.stringify({
           owner_id: user!.id,
@@ -246,8 +252,17 @@ export default function OnboardingPage() {
           is_active: true,
         }),
       });
+      if (error) errors.push(error);
     }
     setLoading(false);
+    if (errors.length) {
+      toast({
+        title: "Some services failed to save",
+        description: errors[0],
+        variant: "destructive",
+      });
+      return;
+    }
     setStep(2);
   }
 
@@ -463,6 +478,18 @@ export default function OnboardingPage() {
                     placeholder="e.g. Westlands, Nairobi"
                     value={location}
                     onChange={e => setLocation(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="bio">Description</Label>
+                  <Textarea
+                    id="bio"
+                    placeholder="What does your business do?"
+                    rows={3}
+                    value={bio}
+                    onChange={e => setBio(e.target.value)}
+                    className="resize-none text-sm"
                   />
                 </div>
               </div>

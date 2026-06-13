@@ -123,7 +123,7 @@ export default function AvailabilityPage() {
           onClick={async () => {
             if (!user) return;
             setSaving(true);
-            await Promise.all([
+            const [scheduleRes, rulesRes] = await Promise.all([
               apiFetch(`/availability/${user.id}/schedule`, {
                 method: "PUT",
                 body: JSON.stringify({
@@ -143,6 +143,10 @@ export default function AvailabilityPage() {
               }),
             ]);
             setSaving(false);
+            if (scheduleRes.error || rulesRes.error) {
+              toast({ title: "Error saving availability", description: scheduleRes.error ?? rulesRes.error ?? undefined, variant: "destructive" });
+              return;
+            }
             setHasChanges(false);
             toast({ title: "Availability saved", description: "Your schedule has been updated." });
           }}

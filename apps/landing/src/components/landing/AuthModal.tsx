@@ -126,7 +126,8 @@ export function AuthModal({ open, onClose, defaultTab = "signin" }: AuthModalPro
     try {
       const { error: err, resetToken: token } = await verifyResetCode(pendingEmail, otp.trim());
       if (err) { setError(err); return; }
-      if (token) setResetToken(token);
+      if (!token) { setError("Invalid reset code."); return; }
+      setResetToken(token);
       setStep("forgot-reset");
     } finally {
       setLoading(false);
@@ -142,26 +143,29 @@ export function AuthModal({ open, onClose, defaultTab = "signin" }: AuthModalPro
       const { error: err } = await resetPassword(form.password, resetToken);
       if (err) { setError(err); return; }
       resetAuthState();
-      navigate(ROUTES.dashboard.home);
+      setTab("signin");
+      setStep("form");
+      setError("Password reset successfully. Please sign in.");
     } finally {
       setLoading(false);
     }
   }
 
-  const headerCopy = {
-    form: {
-      signin: { title: "Welcome back", desc: "Sign in to manage your bookings and business" },
-      signup: { title: "Create your account", desc: "Start your 7-day free trial — no card needed" },
-    },
+  const headerCopy: Record<string, { title: string; desc: string }> = {
     verify: { title: "Check your email", desc: `We sent a 6-digit code to ${pendingEmail}` },
     forgot: { title: "Reset password", desc: "Enter your email and we'll send you a reset code" },
     "forgot-code": { title: "Check your email", desc: `We sent a 6-digit code to ${pendingEmail}` },
     "forgot-reset": { title: "Set new password", desc: "Choose a new password for your account" },
   };
 
-  const header = step in headerCopy
-    ? headerCopy[step as keyof typeof headerCopy]
-    : headerCopy.form[tab];
+  const formHeader = {
+    signin: { title: "Welcome back", desc: "Sign in to manage your bookings and business" },
+    signup: { title: "Create your account", desc: "Start your 7-day free trial — no card needed" },
+  };
+
+  const header = step === "form"
+    ? formHeader[tab]
+    : (headerCopy[step] ?? { title: "", desc: "" });
 
   return (
     <Dialog open={open} onOpenChange={open => { if (!open) handleClose(); }}>

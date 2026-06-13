@@ -61,7 +61,8 @@ function getPatchHandler() {
   const route = profileRouter.stack.find(
     (r: any) => r.route?.path === "/profile/:id" && r.route?.methods?.patch,
   );
-  return route.route.stack[0].handle;
+  if (!route || !route.route || !route.route.stack[0]) throw new Error("PATCH handler not found");
+  return route.route.stack[0].handle as (req: any, res: any) => Promise<void>;
 }
 
 describe("PATCH /profile/:id", () => {
@@ -96,7 +97,7 @@ describe("PATCH /profile/:id", () => {
       capturedData.push(data);
       return { eq: updateEqChain };
     });
-    mockDb.database.from = vi.fn(() => ({
+    (mockDb.database.from as any) = vi.fn(() => ({
       select: vi.fn(() => ({
         eq: eqChain,
         neq: neqChain,

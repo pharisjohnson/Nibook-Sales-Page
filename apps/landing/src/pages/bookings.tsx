@@ -121,6 +121,10 @@ export default function BookingsPage() {
   // Reschedule modal state
   const [rescheduleDate, setRescheduleDate] = useState("");
   const [rescheduleTime, setRescheduleTime] = useState("");
+  const todayLocal = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  })();
 
   const [addForm, setAddForm] = useState({ client: "", phone: "", service: "", date: "", time: "10:00", payment: "M-Pesa", notes: "" });
   const [addError, setAddError] = useState("");
@@ -146,7 +150,11 @@ export default function BookingsPage() {
   const markBooking = async (id: string, newStatus: "Completed" | "No-Show") => {
     const booking = bookings.find(b => b.id === id);
     const dbStatus = newStatus === "No-Show" ? "no-show" : newStatus.toLowerCase();
-    await apiFetch(`/bookings/${id}`, { method: "PATCH", body: JSON.stringify({ status: dbStatus }) });
+    const { error } = await apiFetch(`/bookings/${id}`, { method: "PATCH", body: JSON.stringify({ status: dbStatus }) });
+    if (error) {
+      toast({ title: "Update failed", description: error, variant: "destructive" });
+      return;
+    }
     setBookings(bookings.map(b => b.id === id ? { ...b, status: newStatus } : b));
     toast({
       title: newStatus === "Completed" ? "Marked as completed" : "Marked as no-show",
@@ -156,7 +164,11 @@ export default function BookingsPage() {
 
   const handleCancel = async () => {
     if (!selected) return;
-    await apiFetch(`/bookings/${selected.id}`, { method: "PATCH", body: JSON.stringify({ status: "cancelled" }) });
+    const { error } = await apiFetch(`/bookings/${selected.id}`, { method: "PATCH", body: JSON.stringify({ status: "cancelled" }) });
+    if (error) {
+      toast({ title: "Cancel failed", description: error, variant: "destructive" });
+      return;
+    }
     setBookings(bookings.map(b => b.id === selected.id ? { ...b, status: "Cancelled" } : b));
     toast({ title: "Booking cancelled", description: `${selected.client}'s booking has been cancelled.` });
     closeModal();
@@ -176,7 +188,11 @@ export default function BookingsPage() {
     const formatted = new Date(rescheduleDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
     const isoDate = new Date(`${rescheduleDate}T${rescheduleTime}`).toISOString();
     const displayTime = to12h(rescheduleTime);
-    await apiFetch(`/bookings/${selected!.id}`, { method: "PATCH", body: JSON.stringify({ scheduled_at: isoDate, status: "confirmed" }) });
+    const { error } = await apiFetch(`/bookings/${selected!.id}`, { method: "PATCH", body: JSON.stringify({ scheduled_at: isoDate, status: "confirmed" }) });
+    if (error) {
+      toast({ title: "Reschedule failed", description: error, variant: "destructive" });
+      return;
+    }
     setBookings(bookings.map(b =>
       b.id === selected?.id ? { ...b, date: formatted, time: displayTime, status: "Confirmed" } : b
     ));
@@ -710,7 +726,7 @@ export default function BookingsPage() {
                 type="date"
                 value={rescheduleDate}
                 onChange={e => setRescheduleDate(e.target.value)}
-                min={new Date().toISOString().split("T")[0]}
+                min={todayLocal}
               />
             </div>
             <div className="space-y-2">
