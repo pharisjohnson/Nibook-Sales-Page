@@ -1,36 +1,1195 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
-  title: Api
-  version: 0.1.0
-  description: API specification
+  title: Nibook API
+  version: 1.0.0
+  description: Backend API for Nibook booking and business management platform
 servers:
   - url: /api
     description: Base API path
-tags:
-  - name: health
-    description: Health operations
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
-          description: Healthy
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/HealthStatus"
+          $ref: "#/components/responses/HealthStatus"
+
+  /auth/signup:
+    post:
+      operationId: authSignup
+      tags: [auth]
+      summary: Create a new user account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthSignupRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/AuthSuccess"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+
+  /auth/signin:
+    post:
+      operationId: authSignin
+      tags: [auth]
+      summary: Sign in with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthSigninRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/AuthSuccess"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+
+  /auth/signout:
+    post:
+      operationId: authSignout
+      tags: [auth]
+      summary: Sign out the current user
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+
+  /auth/me:
+    get:
+      operationId: authMe
+      tags: [auth]
+      summary: Get the current authenticated user
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          $ref: "#/components/responses/AuthMeSuccess"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+
+  /directory:
+    get:
+      operationId: getDirectory
+      tags: [directory]
+      summary: List all public business profiles
+      responses:
+        "200":
+          $ref: "#/components/responses/DirectorySuccess"
+
+  /profile/{id}:
+    get:
+      operationId: getProfile
+      tags: [profile]
+      summary: Get a profile by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/ProfileSuccess"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+    patch:
+      operationId: updateProfile
+      tags: [profile]
+      summary: Update a profile
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileUpdateRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/ProfileSuccess"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+
+  /profile/by-slug/{slug}:
+    get:
+      operationId: getProfileBySlug
+      tags: [profile]
+      summary: Get a profile by its public slug
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/ProfileSuccess"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+
+  /services:
+    get:
+      operationId: listServices
+      tags: [services]
+      summary: List services for a business
+      parameters:
+        - name: owner_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/ServicesSuccess"
+    post:
+      operationId: createService
+      tags: [services]
+      summary: Create a new service
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateServiceRequest"
+      responses:
+        "201":
+          $ref: "#/components/responses/ServiceCreated"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+
+  /services/{id}:
+    patch:
+      operationId: updateService
+      tags: [services]
+      summary: Update a service
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateServiceRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/ServiceSuccess"
+    delete:
+      operationId: deleteService
+      tags: [services]
+      summary: Delete a service
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+
+  /bookings:
+    get:
+      operationId: listBookings
+      tags: [bookings]
+      summary: List bookings for a business
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: owner_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          $ref: "#/components/responses/BookingsSuccess"
+    post:
+      operationId: createBooking
+      tags: [bookings]
+      summary: Create a new booking
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBookingRequest"
+      responses:
+        "201":
+          $ref: "#/components/responses/BookingCreated"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+
+  /bookings/{id}:
+    patch:
+      operationId: updateBooking
+      tags: [bookings]
+      summary: Update a booking
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBookingRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/BookingSuccess"
+    delete:
+      operationId: deleteBooking
+      tags: [bookings]
+      summary: Delete a booking
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+
+  /team/{owner_id}:
+    get:
+      operationId: listTeam
+      tags: [team]
+      summary: List team members and invites
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: owner_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/TeamSuccess"
+
+  /team/{owner_id}/invite:
+    post:
+      operationId: inviteTeamMember
+      tags: [team]
+      summary: Invite a team member
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: owner_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InviteTeamRequest"
+      responses:
+        "201":
+          $ref: "#/components/responses/InviteCreated"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+
+  /team/{owner_id}/invites/{id}:
+    delete:
+      operationId: deleteTeamInvite
+      tags: [team]
+      summary: Revoke a team invite
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: owner_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+
+  /team/{owner_id}/members/{id}:
+    patch:
+      operationId: updateTeamMember
+      tags: [team]
+      summary: Update team member role
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: owner_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMemberRoleRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/TeamMemberSuccess"
+    delete:
+      operationId: deleteTeamMember
+      tags: [team]
+      summary: Remove a team member
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: owner_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+
+  /availability/{owner_id}:
+    get:
+      operationId: getAvailability
+      tags: [availability]
+      summary: Get full availability setup for a business
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: owner_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/AvailabilitySuccess"
+
+  /availability/{owner_id}/schedule:
+    put:
+      operationId: updateAvailabilitySchedule
+      tags: [availability]
+      summary: Replace weekly availability schedule
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: owner_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateScheduleRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+
+  /availability/{owner_id}/blackouts:
+    post:
+      operationId: createBlackout
+      tags: [availability]
+      summary: Add a date blackout
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: owner_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBlackoutRequest"
+      responses:
+        "201":
+          $ref: "#/components/responses/BlackoutCreated"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+
+  /availability/{owner_id}/blackouts/{id}:
+    delete:
+      operationId: deleteBlackout
+      tags: [availability]
+      summary: Remove a date blackout
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: owner_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+
+  /availability/{owner_id}/rules:
+    put:
+      operationId: updateAvailabilityRules
+      tags: [availability]
+      summary: Upsert availability booking rules
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: owner_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateRulesRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+
+  /analytics/{owner_id}:
+    get:
+      operationId: getAnalytics
+      tags: [analytics]
+      summary: Get business analytics
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: owner_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          $ref: "#/components/responses/AnalyticsSuccess"
+
+  /subscriptions/initialize:
+    post:
+      operationId: initializeSubscription
+      tags: [subscriptions]
+      summary: Initialize a Paystack subscription checkout
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InitializeSubscriptionRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/SubscriptionInitializeSuccess"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "500":
+          $ref: "#/components/responses/ConfigurationError"
+
+  /subscriptions/verify/{reference}:
+    get:
+      operationId: verifySubscription
+      tags: [subscriptions]
+      summary: Verify a Paystack payment reference
+      parameters:
+        - name: reference
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/SubscriptionVerifySuccess"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "500":
+          $ref: "#/components/responses/ConfigurationError"
+
+  /subscriptions/webhook:
+    post:
+      operationId: paystackWebhook
+      tags: [subscriptions]
+      summary: Paystack subscription event webhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          $ref: "#/components/responses/WebhookReceived"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+
+  /waitlist:
+    post:
+      operationId: joinWaitlist
+      tags: [waitlist]
+      summary: Join the waitlist
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WaitlistRequest"
+      responses:
+        "201":
+          $ref: "#/components/responses/WaitlistCreated"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+
+  /upload:
+    post:
+      operationId: uploadFile
+      tags: [upload]
+      summary: Upload a file
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          $ref: "#/components/responses/UploadSuccess"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
   schemas:
     HealthStatus:
       type: object
+      required:
+        - status
       properties:
         status:
           type: string
-      required:
-        - status
 
+    AuthSignupRequest:
+      type: object
+      required:
+        - email
+        - password
+        - businessName
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 6
+        businessName:
+          type: string
+
+    AuthSigninRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    AuthSuccess:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/AuthUser"
+        token:
+          type: string
+
+    AuthUser:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        displayName:
+          type: string
+          nullable: true
+
+    AuthMeSuccess:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/AuthUser"
+
+    ProfileSuccess:
+      type: object
+      properties:
+        data:
+          type: object
+
+    ProfileUpdateRequest:
+      type: object
+      properties:
+        business_name:
+          type: string
+        slug:
+          type: string
+        phone:
+          type: string
+        location:
+          type: string
+        bio:
+          type: string
+        category:
+          type: string
+        logo_url:
+          type: string
+        cover_url:
+          type: string
+        avatar_url:
+          type: string
+        mpesa_paybill:
+          type: string
+        mpesa_account:
+          type: string
+        whatsapp_enabled:
+          type: boolean
+        whatsapp_phone:
+          type: string
+        reminder_hours:
+          type: integer
+        cancellation_policy:
+          type: string
+        booking_widget_theme:
+          type: string
+        onboarding_completed:
+          type: boolean
+
+    DirectorySuccess:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+
+    CreateServiceRequest:
+      type: object
+      required:
+        - owner_id
+        - name
+      properties:
+        owner_id:
+          type: string
+        name:
+          type: string
+        price:
+          type: integer
+        duration_minutes:
+          type: integer
+        image_url:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+
+    UpdateServiceRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        price:
+          type: integer
+        duration_minutes:
+          type: integer
+        image_url:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+
+    ServiceSuccess:
+      type: object
+      properties:
+        data:
+          type: object
+
+    ServiceCreated:
+      type: object
+      properties:
+        data:
+          type: object
+
+    ServicesSuccess:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+
+    CreateBookingRequest:
+      type: object
+      required:
+        - owner_id
+        - client_name
+        - scheduled_at
+      properties:
+        owner_id:
+          type: string
+        service_id:
+          type: string
+          nullable: true
+        client_name:
+          type: string
+        client_phone:
+          type: string
+          nullable: true
+        client_email:
+          type: string
+          format: email
+          nullable: true
+        scheduled_at:
+          type: string
+          format: date-time
+        duration_minutes:
+          type: integer
+        notes:
+          type: string
+          nullable: true
+        amount:
+          type: integer
+        payment_status:
+          type: string
+          enum: [unpaid, pending, paid, refunded, failed]
+
+    UpdateBookingRequest:
+      type: object
+      properties:
+        service_id:
+          type: string
+          nullable: true
+        client_name:
+          type: string
+        client_phone:
+          type: string
+          nullable: true
+        client_email:
+          type: string
+          format: email
+          nullable: true
+        scheduled_at:
+          type: string
+          format: date-time
+        duration_minutes:
+          type: integer
+        notes:
+          type: string
+          nullable: true
+        amount:
+          type: integer
+        payment_status:
+          type: string
+          enum: [unpaid, pending, paid, refunded, failed]
+        status:
+          type: string
+          enum: [pending, confirmed, completed, cancelled, no-show]
+
+    BookingSuccess:
+      type: object
+      properties:
+        data:
+          type: object
+
+    BookingCreated:
+      type: object
+      properties:
+        data:
+          type: object
+
+    BookingsSuccess:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+
+    TeamSuccess:
+      type: object
+      properties:
+        members:
+          type: array
+          items:
+            type: object
+        invites:
+          type: array
+          items:
+            type: object
+
+    TeamMemberSuccess:
+      type: object
+      properties:
+        data:
+          type: object
+
+    InviteCreated:
+      type: object
+      properties:
+        data:
+          type: object
+
+    InviteTeamRequest:
+      type: object
+      required:
+        - email
+        - role
+      properties:
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+
+    UpdateMemberRoleRequest:
+      type: object
+      required:
+        - role
+      properties:
+        role:
+          type: string
+
+    UpdateScheduleRequest:
+      type: object
+      required:
+        - schedule
+      properties:
+        schedule:
+          type: array
+          items:
+            type: object
+            required:
+              - day_name
+              - is_active
+              - start_time
+              - end_time
+              - sort_order
+            properties:
+              day_name:
+                type: string
+              is_active:
+                type: boolean
+              start_time:
+                type: string
+              end_time:
+                type: string
+              sort_order:
+                type: integer
+
+    CreateBlackoutRequest:
+      type: object
+      required:
+        - date
+      properties:
+        date:
+          type: string
+          format: date
+        reason:
+          type: string
+
+    BlackoutCreated:
+      type: object
+      properties:
+        data:
+          type: object
+
+    UpdateRulesRequest:
+      type: object
+      properties:
+        min_booking_notice_hours:
+          type: integer
+        max_booking_window_days:
+          type: integer
+        buffer_minutes:
+          type: integer
+        allow_same_day_booking:
+          type: boolean
+        require_confirmation:
+          type: boolean
+        cancellation_policy:
+          type: string
+
+    AvailabilitySuccess:
+      type: object
+      properties:
+        schedule:
+          type: array
+          items:
+            type: object
+        blackouts:
+          type: array
+          items:
+            type: object
+        rules:
+          type: object
+          nullable: true
+
+    AnalyticsSuccess:
+      type: object
+      properties:
+        totalRevenue:
+          type: integer
+        totalBookings:
+          type: integer
+        completionRate:
+          type: integer
+        serviceStats:
+          type: array
+          items:
+            type: object
+        topClients:
+          type: array
+          items:
+            type: object
+        statusCounts:
+          type: object
+        raw:
+          type: array
+          items:
+            type: object
+
+    InitializeSubscriptionRequest:
+      type: object
+      required:
+        - email
+        - plan_code
+      properties:
+        email:
+          type: string
+          format: email
+        plan_code:
+          type: string
+        owner_id:
+          type: string
+
+    SubscriptionInitializeSuccess:
+      type: object
+      properties:
+        success:
+          type: boolean
+        authorization_url:
+          type: string
+        reference:
+          type: string
+        access_code:
+          type: string
+
+    SubscriptionVerifySuccess:
+      type: object
+      properties:
+        success:
+          type: boolean
+        paid:
+          type: boolean
+        status:
+          type: string
+        plan:
+          type: string
+          nullable: true
+        interval:
+          type: string
+          nullable: true
+        customer_email:
+          type: string
+        amount:
+          type: number
+        currency:
+          type: string
+
+    WaitlistRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+
+    WaitlistCreated:
+      type: object
+      properties:
+        success:
+          type: boolean
+
+    UploadSuccess:
+      type: object
+      properties:
+        url:
+          type: string
+
+    WebhookReceived:
+      type: object
+      properties:
+        received:
+          type: boolean
+
+  responses:
+    HealthStatus:
+      description: Server is healthy
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/HealthStatus"
+
+    Success:
+      description: Operation succeeded
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+
+    ValidationError:
+      description: Invalid request payload or missing fields
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+
+    UnauthorizedError:
+      description: Authentication required or invalid token
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+
+    NotFoundError:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+
+    ConflictError:
+      description: Resource already exists
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+
+    ConfigurationError:
+      description: Server misconfiguration
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+              message:
+                type: string

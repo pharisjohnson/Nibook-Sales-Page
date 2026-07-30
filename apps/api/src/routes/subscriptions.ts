@@ -1,9 +1,9 @@
-import { Router, type Request, type Response } from "express";
+import { Router, type IRouter, type Request, type Response } from "express";
 import crypto from "crypto";
 import { getInsforgeAdmin } from "../lib/insforge.js";
+import { requireAuth } from "../middlewares/auth.js";
 
-const router = Router();
-
+const router: IRouter = Router();
 const PAYSTACK_BASE = "https://api.paystack.co";
 
 function paystackHeaders() {
@@ -18,7 +18,7 @@ function paystackHeaders() {
 // Initializes a Paystack transaction tied to a subscription plan.
 // Body: { email, plan_code, owner_id? }
 // Returns: { authorization_url, reference, access_code }
-router.post("/subscriptions/initialize", async (req: Request, res: Response) => {
+router.post("/subscriptions/initialize", requireAuth, async (req: Request, res: Response) => {
   const { email, plan_code, owner_id } = req.body as {
     email?: string;
     plan_code?: string;
@@ -40,7 +40,7 @@ router.post("/subscriptions/initialize", async (req: Request, res: Response) => 
   const callbackUrl = `${appUrl}/subscription/callback`;
 
   try {
-    const paystackRes: any = await fetch(`${PAYSTACK_BASE}/transaction/initialize`, {
+    const paystackRes = await fetch(`${PAYSTACK_BASE}/transaction/initialize`, {
       method: "POST",
       headers: paystackHeaders(),
       body: JSON.stringify({
@@ -107,7 +107,7 @@ router.get("/subscriptions/verify/:reference", async (req: Request, res: Respons
   }
 
   try {
-    const paystackRes: any = await fetch(
+    const paystackRes = await fetch(
       `${PAYSTACK_BASE}/transaction/verify/${encodeURIComponent(String(reference))}`,
       { headers: paystackHeaders() },
     );
@@ -147,13 +147,7 @@ router.get("/subscriptions/verify/:reference", async (req: Request, res: Respons
       }).eq("reference", reference);
 
       if (ownerId) {
-        const planName = (tx.plan_object?.name ?? "").toLowerCase();
-        const resolvedPlan = planName.includes("premium") ? "premium"
-          : planName.includes("starter") ? "starter"
-          : "starter";
-
         await insforge.database.from("profiles").update({
-          plan: resolvedPlan,
           subscription_plan: tx.plan_object?.name ?? "paid",
           subscription_status: "active",
           paystack_customer_code: tx.customer.customer_code,
@@ -217,14 +211,8 @@ router.post("/subscriptions/webhook", async (req: Request, res: Response) => {
         const subscriptionCode = event.data.subscription_code as string | undefined;
         const planObj = event.data.plan as Record<string, unknown> | undefined;
         if (customerCode) {
-          const planName = String(planObj?.name ?? "").toLowerCase();
-          const resolvedPlan = planName.includes("premium") ? "premium"
-            : planName.includes("starter") ? "starter"
-            : "starter";
-
           await insforge.database.from("profiles")
             .update({
-              plan: resolvedPlan,
               subscription_status: "active",
               subscription_code: subscriptionCode ?? null,
               subscription_plan: planObj?.name ?? "paid",
@@ -249,7 +237,7 @@ router.post("/subscriptions/webhook", async (req: Request, res: Response) => {
         const customerCode = (event.data.customer as Record<string, unknown>)?.customer_code as string | undefined;
         if (customerCode) {
           await insforge.database.from("profiles")
-            .update({ plan: "trial", subscription_status: "cancelled" })
+            .update({ subscription_status: "cancelled" })
             .eq("paystack_customer_code", customerCode);
         }
         break;

@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import crypto from "crypto";
 import { getInsforgeAdmin } from "../lib/insforge.js";
+import { requireAuth } from "../middlewares/auth.js";
 
 const router = Router();
 
@@ -39,7 +40,7 @@ function normalizePhone(raw: string): string {
   return digits;
 }
 
-router.post("/payments/initiate", async (req: Request, res: Response) => {
+router.post("/payments/initiate", requireAuth, async (req: Request, res: Response) => {
   const { phone, amount, plan, reference, owner_id } = req.body as {
     phone?: string;
     amount?: number;

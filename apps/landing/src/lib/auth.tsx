@@ -1,27 +1,29 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { UserSchema } from "@insforge/sdk";
 import { insforge } from "./insforge";
-import { setSession, clearSession, getStoredUser, getStoredToken, apiFetch } from "./api";
-import {
-  setPendingBusinessName,
-  clearPendingBusinessName,
-  slugFromBusinessName,
-} from "./signup-business";
+import { setSession, clearSession, getStoredUser, apiFetch } from "./api";
 import { identifyUser, resetAnalyticsUser, track } from "./analytics";
 
 type InsforgeUser = UserSchema;
 
+export const PENDING_SIGNUP_KEY = "nibook_pending_signup";
+
+interface PendingSignup {
+  email: string;
+  password: string;
+  businessName: string;
+}
+
 interface AuthContextType {
   user: InsforgeUser | null;
   loading: boolean;
-  signUp: (email: string, password: string, businessName: string) => Promise<{ error: string | null; requiresVerification: boolean }>;
-  verifyEmail: (email: string, otp: string, businessName?: string) => Promise<{ error: string | null }>;
-  resendVerification: (email: string) => Promise<{ error: string | null }>;
+  emailVerificationSent: boolean;
+  emailVerificationSuccess: boolean;
+  pendingEmail: string;
+  signUp: (email: string, password: string, businessName: string) => Promise<{ error: string | null; needsEmailVerification?: boolean }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
-  sendResetPasswordEmail: (email: string) => Promise<{ error: string | null }>;
-  verifyResetCode: (email: string, code: string) => Promise<{ error: string | null; resetToken: string | null }>;
-  resetPassword: (newPassword: string, resetToken: string) => Promise<{ error: string | null }>;
+  clearVerificationFlag: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -29,11 +31,11 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<InsforgeUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [emailVerificationSent, setEmailVerificationSent] = useState(false);
+  const [emailVerificationSuccess, setEmailVerificationSuccess] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState("");
 
   useEffect(() => {
-    const storedToken = getStoredToken();
-    if (storedToken) insforge.setAccessToken(storedToken);
-
     insforge.auth.getCurrentUser().then(({ data }) => {
       const sdkUser = data?.user ?? null;
       if (sdkUser) {
@@ -41,11 +43,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const stored = getStoredUser();
         if (!stored || stored.id !== sdkUser.id) {
           const raw = data as any;
-          const token = raw?.session?.access_token ?? raw?.access_token ?? storedToken ?? null;
-          if (token) {
-            insforge.setAccessToken(token);
-            setSession({ id: sdkUser.id, email: sdkUser.email ?? "" }, token);
-          }
+          const token = raw?.session?.access_token ?? raw?.access_token ?? null;
+          if (token) setSession({ id: sdkUser.id, email: sdkUser.email ?? "" }, token);
         }
       } else {
         const stored = getStoredUser();
@@ -55,112 +54,85 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  async function persistSignupBusinessName(userId: string, businessName: string) {
-    const name = businessName.trim();
-    if (!name) return;
-    setPendingBusinessName(name);
-    const slug = slugFromBusinessName(name);
-    await apiFetch(`/profile/${userId}`, {
-      method: "PATCH",
-      body: JSON.stringify({ business_name: name, slug, plan: "trial" }),
-    });
-  }
-
   async function signUp(email: string, password: string, businessName: string) {
-    const { data, error } = await insforge.auth.signUp({
-      email,
-      password,
-      name: businessName,
+    const { data, error } = await apiFetch<any>("/auth/signup", {
+      method: "POST",
+      body: JSON.stringify({ email, password, businessName }),
     });
-    if (error) return { error: (error as any).message ?? "Sign up failed", requiresVerification: false };
+    if (error) return { error };
 
-    const raw = data as any;
-    const token = raw?.session?.access_token ?? raw?.access_token ?? null;
-    const requiresVerification = !token;
+    if (data?.requireEmailVerification) {
+      setPendingEmail(email);
+      setEmailVerificationSent(true);
+      sessionStorage.setItem(PENDING_SIGNUP_KEY, JSON.stringify({ email, password, businessName }));
+      return { error: null, needsEmailVerification: true };
+    }
 
-    const name = businessName.trim();
-    if (name) setPendingBusinessName(name);
-
-    if (data?.user && token) {
-      setSession({ id: data.user.id, email: data.user.email ?? "" }, token);
-      insforge.setAccessToken(token);
-      await persistSignupBusinessName(data.user.id, name);
+    if (data?.user?.id) {
       setUser(data.user);
-      identifyUser(data.user.id, data.user.email ?? "", name);
+      if (data.token) setSession({ id: data.user.id, email: data.user.email ?? "" }, data.token);
+      identifyUser(data.user.id, data.user.email ?? "", businessName);
       track.signedUp();
     }
 
-    return { error: null, requiresVerification };
+    return { error: null };
   }
 
-  async function verifyEmail(email: string, otp: string, businessName?: string) {
-    const { data, error } = await insforge.auth.verifyEmail({ email, otp });
-    if (error) return { error: (error as any).message ?? "Verification failed" };
-    if (data?.user) {
-      const raw = data as any;
-      const sessionToken = data.accessToken ?? raw?.session?.access_token ?? raw?.access_token ?? null;
-      if (sessionToken) {
-        setSession({ id: data.user.id, email: data.user.email ?? "" }, sessionToken);
-        insforge.setAccessToken(sessionToken);
-      }
-      await persistSignupBusinessName(data.user.id, businessName ?? "");
-      setUser(data.user);
-      track.signedUp();
+  async function verifyEmail(email: string, otp: string) {
+    const { error } = await insforge.auth.verifyEmail({ email, otp });
+    if (error) return { error };
+    setEmailVerificationSuccess(true);
+
+    const stored = sessionStorage.getItem(PENDING_SIGNUP_KEY);
+    if (stored) {
+      try {
+        const { password } = JSON.parse(stored);
+        return await signIn(email, password);
+      } catch {}
     }
     return { error: null };
   }
 
-  async function resendVerification(email: string) {
+  async function resendVerificationCode(email: string) {
     const { error } = await insforge.auth.resendVerificationEmail({ email });
-    if (error) return { error: (error as any).message ?? "Failed to resend code" };
+    if (error) return { error };
     return { error: null };
   }
 
   async function signIn(email: string, password: string) {
-    const { data, error } = await insforge.auth.signInWithPassword({ email, password });
-    if (error) return { error: (error as any).message ?? "Sign in failed" };
-    if (data?.user) {
-      const raw = data as any;
-      const token = raw?.session?.access_token ?? raw?.access_token ?? null;
-      if (token) {
-        insforge.setAccessToken(token);
-        setSession({ id: data.user.id, email: data.user.email ?? "" }, token);
-      }
+    const { data, error } = await apiFetch("/auth/signin", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+    if (error) return { error };
+    if (data?.user?.id) {
       setUser(data.user);
+      if (data.token) setSession({ id: data.user.id, email: data.user.email ?? "" }, data.token);
       identifyUser(data.user.id, data.user.email ?? "");
       track.signedIn();
     }
     return { error: null };
   }
 
-  async function sendResetPasswordEmail(email: string) {
-    const { error } = await insforge.auth.sendResetPasswordEmail({ email });
-    if (error) return { error: (error as any).message ?? "Failed to send reset email" };
-    return { error: null };
-  }
-
-  async function verifyResetCode(email: string, code: string) {
-    const { data, error } = await insforge.auth.exchangeResetPasswordToken({ email, code });
-    if (error) return { error: (error as any).message ?? "Invalid code", resetToken: null };
-    return { error: null, resetToken: (data as any)?.token ?? null };
-  }
-
-  async function resetPassword(newPassword: string, resetToken: string) {
-    const { error } = await insforge.auth.resetPassword({ newPassword, otp: resetToken });
-    if (error) return { error: (error as any).message ?? "Failed to reset password" };
-    return { error: null };
-  }
-
   async function signOut() {
     await insforge.auth.signOut();
     clearSession();
-    clearPendingBusinessName();
     resetAnalyticsUser();
     setUser(null);
   }
 
+  function clearVerificationFlag() {
+    setEmailVerificationSent(false);
+    setEmailVerificationSuccess(false);
+    setPendingEmail("");
+  }
+
   return (
-    <AuthContext.Provider value={{ user, loading, signUp, verifyEmail, resendVerification, signIn, signOut, sendResetPasswordEmail, verifyResetCode, resetPassword }}>
+    <AuthContext.Provider value={{
+      user, loading,
+      emailVerificationSent, emailVerificationSuccess, pendingEmail,
+      signUp, verifyEmail, resendVerificationCode, signIn, signOut, clearVerificationFlag,
+    }}>
       {children}
     </AuthContext.Provider>
   );

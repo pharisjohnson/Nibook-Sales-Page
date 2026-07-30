@@ -8,6 +8,17 @@ import { Testimonials } from "@/components/landing/Testimonials";
 import { Pricing } from "@/components/landing/Pricing";
 import { FinalCta } from "@/components/landing/Cta";
 import { Footer } from "@/components/landing/Footer";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+
+function SectionErrorFallback({ title }: { title: string }) {
+  return (
+    <div className="py-24 bg-muted/30">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+        <p className="text-muted-foreground">Unable to load {title}. Please refresh the page.</p>
+      </div>
+    </div>
+  );
+}
 
 export default function Home() {
   useSeo({
@@ -19,13 +30,27 @@ export default function Home() {
     <div className="min-h-screen bg-background font-sans text-foreground selection:bg-primary/20 selection:text-primary">
       <Navbar />
       <main>
-        <Hero />
-        <PainPoints />
-        <Features />
-        <HowItWorks />
-        <Testimonials />
-        <Pricing />
-        <FinalCta />
+        <ErrorBoundary>
+          <Hero />
+        </ErrorBoundary>
+        <ErrorBoundary fallback={<SectionErrorFallback title="pain points section" />}>
+          <PainPoints />
+        </ErrorBoundary>
+        <ErrorBoundary fallback={<SectionErrorFallback title="features section" />}>
+          <Features />
+        </ErrorBoundary>
+        <ErrorBoundary fallback={<SectionErrorFallback title="how it works section" />}>
+          <HowItWorks />
+        </ErrorBoundary>
+        <ErrorBoundary fallback={<SectionErrorFallback title="testimonials section" />}>
+          <Testimonials />
+        </ErrorBoundary>
+        <ErrorBoundary fallback={<SectionErrorFallback title="pricing section" />}>
+          <Pricing />
+        </ErrorBoundary>
+        <ErrorBoundary fallback={<SectionErrorFallback title="call to action section" />}>
+          <FinalCta />
+        </ErrorBoundary>
       </main>
       <Footer />
     </div>

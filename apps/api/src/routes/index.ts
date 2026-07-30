@@ -14,6 +14,7 @@ import adminRouter from "./admin";
 import integrationsRouter from "./integrations";
 import mcpRouter from "./mcp";
 import { apiLimiter, authLimiter, uploadLimiter } from "../middlewares/rateLimiter.js";
+import { requireAuth } from "../middlewares/auth.js";
 
 const router = Router();
 
@@ -23,17 +24,26 @@ router.use(apiLimiter);
 
 router.use(healthRouter);
 router.use(authRouter);
-router.use(paymentsRouter);
-router.use(subscriptionsRouter);
-router.use(bookingsRouter);
-router.use(availabilityRouter);
-router.use(teamRouter);
-router.use(profileRouter);
-router.use(servicesRouter);
-router.use(waitlistRouter);
-router.use(uploadRouter);
-router.use(adminRouter);
 
+router.use(paymentsRouter);
+
+router.use(waitlistRouter);
+
+const publicProfileRouter = Router();
+publicProfileRouter.use(profileRouter);
+router.use(publicProfileRouter);
+
+const protectedRouter = Router();
+protectedRouter.use(requireAuth);
+
+protectedRouter.use(bookingsRouter);
+protectedRouter.use(availabilityRouter);
+protectedRouter.use(teamRouter);
+protectedRouter.use(servicesRouter);
+protectedRouter.use(uploadRouter);
+protectedRouter.use("/admin", adminRouter);
+
+router.use(protectedRouter);
 router.use(integrationsRouter);
 router.use(mcpRouter);
 

@@ -9,6 +9,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/auth";
+import { getStoredUser } from "@/lib/api";
+
+const TOKEN_KEY = "nibook_auth_token";
 
 const STARTER_PLAN_CODE = import.meta.env.VITE_PAYSTACK_STARTER_PLAN_CODE as string | undefined;
 const PREMIUM_PLAN_CODE = import.meta.env.VITE_PAYSTACK_PREMIUM_PLAN_CODE as string | undefined;
@@ -112,7 +115,7 @@ export function Pricing() {
     setPay({ plan: null, email: "", step: "idle" });
   }
 
-  async function redirectToPaystack() {
+   async function redirectToPaystack() {
     if (!pay.plan || !pay.email.trim()) return;
 
     if (!pay.plan.planCode) {
@@ -127,9 +130,13 @@ export function Pricing() {
     setPay(s => ({ ...s, step: "redirecting" }));
 
     try {
+      const token = localStorage.getItem(TOKEN_KEY);
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
       const res = await fetch("/api/subscriptions/initialize", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           email: pay.email.trim(),
           plan_code: pay.plan.planCode,

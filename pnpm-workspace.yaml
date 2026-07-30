@@ -5,10 +5,10 @@ packages:
   - scripts
 
 allowBuilds:
-  '@sentry/cli': true
-  core-js: true
+  '@sentry/cli': set this to true or false
+  core-js: set this to true or false
   esbuild: true
-  protobufjs: true
+  protobufjs: set this to true or false
 
 autoInstallPeers: false
 
