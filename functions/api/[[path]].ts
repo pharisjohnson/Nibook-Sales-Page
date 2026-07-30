@@ -75,6 +75,9 @@ async function route(method: string, path: string, url: URL, request: Request): 
   if (path === "/auth/signout" && method === "POST") return json({ success: true });
   if (path === "/auth/me" && method === "GET") return handleAuthMe(request);
 
+  // Welcome email
+  if (path === "/email/welcome" && method === "POST") return handleWelcomeEmail(body);
+
   // Waitlist
   if (path === "/waitlist" && method === "POST") return handleWaitlist(body);
 
@@ -156,8 +159,7 @@ async function handleSignup(body: any, origin: string): Promise<Response> {
   const raw = data as any;
   const token = raw?.accessToken ?? null;
   const user = raw?.user ?? null;
-  const emailVerified = user?.emailVerified ?? false;
-  return json({ user: { id: user?.id ?? null, email: user?.email ?? email, displayName: businessName ?? null }, token, requireEmailVerification: !emailVerified });
+  return json({ user: { id: user?.id ?? null, email: user?.email ?? email, displayName: businessName ?? null }, token, requireEmailVerification: raw?.requireEmailVerification ?? false });
 }
 
 async function handleSignin(body: any): Promise<Response> {
@@ -469,6 +471,24 @@ async function handleProfileBySlug(slug: string): Promise<Response> {
   const { data, error: err } = await db.from("profiles").select("*").eq("slug", slug).single();
   if (err) return json({ error: "Business not found" }, 404);
   return json({ data });
+}
+
+// ---- Welcome Email ----
+
+async function handleWelcomeEmail(body: any): Promise<Response> {
+  const { email, businessName } = body;
+  if (!email) return json({ error: "email required" }, 400);
+  const { error: err } = await sendEmail(email, "Welcome to Nibook!",
+    `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
+      <img src="https://nibook.pages.dev/nibook-icon.png" alt="Nibook" style="width:64px;height:64px;border-radius:12px"/>
+      <h1 style="margin:24px 0 8px">Welcome to Nibook${businessName ? `, ${businessName}` : ''}!</h1>
+      <p style="color:#666;line-height:1.6">Your account is ready. You can now <a href="https://nibook.pages.dev/dashboard" style="color:#2563eb">log in</a> to manage your bookings, services, and availability.</p>
+      <p style="color:#666;line-height:1.6">If you ever need to reset your password, go to the sign-in page and click "Forgot Password".</p>
+      <hr style="border:none;border-top:1px solid #eee;margin:24px 0"/>
+      <p style="color:#999;font-size:12px">Nibook — Online booking for Kenyan service businesses</p>
+    </div>`);
+  if (err) return json({ error: (err as any)?.message ?? String(err) }, 500);
+  return json({ success: true });
 }
 
 async function handleDirectory(): Promise<Response> {

@@ -24,6 +24,8 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   clearVerificationFlag: () => void;
+  sendResetCode: (email: string) => Promise<{ error: string | null }>;
+  resetPassword: (otp: string, newPassword: string) => Promise<{ error: string | null }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -121,6 +123,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }
 
+  async function sendResetCode(email: string) {
+    const { error } = await insforge.auth.sendResetPasswordEmail({ email });
+    if (error) return { error: (error as any)?.message ?? String(error) };
+    return { error: null };
+  }
+
+  async function resetPassword(otp: string, newPassword: string) {
+    const { error } = await insforge.auth.resetPassword({ otp, newPassword });
+    if (error) return { error: (error as any)?.message ?? String(error) };
+    return { error: null };
+  }
+
   function clearVerificationFlag() {
     setEmailVerificationSent(false);
     setEmailVerificationSuccess(false);
@@ -132,6 +146,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user, loading,
       emailVerificationSent, emailVerificationSuccess, pendingEmail,
       signUp, verifyEmail, resendVerificationCode, signIn, signOut, clearVerificationFlag,
+      sendResetCode, resetPassword,
     }}>
       {children}
     </AuthContext.Provider>

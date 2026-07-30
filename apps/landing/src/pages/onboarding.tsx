@@ -161,6 +161,10 @@ export default function OnboardingPage() {
     await updateProfile({ onboarding_completed: true });
     track.onboardingCompleted();
     clearPendingBusinessName();
+    apiFetch("/email/welcome", {
+      method: "POST",
+      body: JSON.stringify({ email: user?.email, businessName: bizName || profile?.business_name }),
+    });
     navigate(navigateTo);
   }
 

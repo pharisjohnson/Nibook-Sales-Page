@@ -155,3 +155,13 @@ export const storage = {
     getPublicUrl: (path: string) => `${base()}/api/storage/buckets/${bucket}/objects/${encodeURIComponent(path)}`,
   }),
 };
+
+export async function sendEmail(to: string, subject: string, html: string) {
+  const res = await fetch(`${base()}/api/email/send-raw`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ to, subject, html }),
+  });
+  const data = await res.json();
+  return { data, error: res.ok ? null : data };
+}

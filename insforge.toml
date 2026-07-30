@@ -1,6 +1,6 @@
 [auth]
 allowed_redirect_urls = ["https://nibook.pages.dev", "http://localhost:5173", "http://localhost:8080"]
-require_email_verification = true
+require_email_verification = false
 verify_email_method = "code"
 reset_password_method = "code"
 disable_signup = false
