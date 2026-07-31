@@ -63,7 +63,12 @@ export async function onRequest(context: { request: Request; env: Record<string,
 }
 
 async function route(method: string, path: string, url: URL, request: Request): Promise<Response> {
-  const body = ["POST", "PATCH", "PUT"].includes(method) ? await request.json().catch(() => ({})) : {};
+  // Routes that read the raw request body (file uploads, webhook signature checks)
+  // must NOT have their body pre-consumed by the JSON parse below.
+  const rawBodyRoutes = ["/upload", "/subscriptions/webhook"];
+  const body = ["POST", "PATCH", "PUT"].includes(method) && !rawBodyRoutes.includes(path)
+    ? await request.json().catch(() => ({}))
+    : {};
 
   // Health
   if ((path === "/" || path === "/healthz") && method === "GET") return json({ status: "ok" });
