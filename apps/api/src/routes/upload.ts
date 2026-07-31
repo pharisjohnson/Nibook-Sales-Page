@@ -1,5 +1,7 @@
 import express, { Router, type Request, type Response } from "express";
+import { randomUUID } from "node:crypto";
 import { getInsforgeAdmin } from "../lib/insforge.js";
+import { requireAuth } from "../middlewares/auth.js";
 
 const router = Router();
 const BUCKET = "nibook-media";
@@ -12,17 +14,30 @@ const ALLOWED_TYPES: Record<string, string> = {
   "image/gif": "gif",
 };
 
+const FOLDER_MAP: Record<string, string> = {
+  "profiles": "logos", "logos": "logos",
+  "covers": "covers",
+  "services": "services",
+  "team": "team",
+};
+
+function getUserId(req: Request): string | null {
+  const user = (req as any).user;
+  return user?.id ?? user?.sub ?? null;
+}
+
 // POST /api/upload
 // Body: raw binary of the image file
-// Query: folder=profiles|services|team (default: misc)
-// Headers: Content-Type (image mime type), Authorization: Bearer <token>
+// Query: folder=logos|covers|services|team (default: misc)
+// Headers: Content-Type (image mime type), Authorization: Bearer ***
 // Returns: { url: string }
 router.post(
   "/upload",
+  requireAuth,
   express.raw({ type: Object.keys(ALLOWED_TYPES), limit: "10mb" }),
   async (req: Request, res: Response) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith("Bearer ")) {
+    const userId = getUserId(req);
+    if (!userId) {
       res.status(401).json({ error: "Not authenticated" });
       return;
     }
@@ -34,9 +49,9 @@ router.post(
       return;
     }
 
-    const folder = String(req.query.folder ?? "misc").replace(/[^a-z0-9-_]/gi, "");
-    const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-    const path = `${folder}/${filename}`;
+    const rawFolder = String(req.query.folder ?? "misc");
+    const folder = (FOLDER_MAP[rawFolder] ?? "misc").replace(/[^a-z0-9-_]/gi, "");
+    const filename = `${folder}/${userId}_${randomUUID()}.${ext}`;
 
     const body = req.body as Buffer;
     if (!body || body.length === 0) {
@@ -52,14 +67,13 @@ router.post(
     try {
       const insforge = getInsforgeAdmin();
       const blob = new Blob([new Uint8Array(body)], { type: contentType });
-      const { data, error } = await insforge.storage.from(BUCKET).upload(path, blob);
+      const { data, error } = await insforge.storage.from(BUCKET).upload(filename, blob);
 
       if (error || !data) {
         res.status(500).json({ error: error?.message ?? "Upload failed" });
         return;
       }
 
-      // data.key is the path in the bucket
       const url = insforge.storage.from(BUCKET).getPublicUrl(data.key);
       res.json({ url });
     } catch (err) {

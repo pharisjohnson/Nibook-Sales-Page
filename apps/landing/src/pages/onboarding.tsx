@@ -124,7 +124,7 @@ export default function OnboardingPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadingLogo(true);
-    const { url, error } = await uploadFile(file, "profiles");
+    const { url, error } = await uploadFile(file, "logos");
     setUploadingLogo(false);
     if (error || !url) {
       toast({ title: "Logo upload failed", description: error ?? "Try again", variant: "destructive" });
@@ -137,7 +137,7 @@ export default function OnboardingPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadingCover(true);
-    const { url, error } = await uploadFile(file, "profiles");
+    const { url, error } = await uploadFile(file, "covers");
     setUploadingCover(false);
     if (error || !url) {
       toast({ title: "Cover upload failed", description: error ?? "Try again", variant: "destructive" });

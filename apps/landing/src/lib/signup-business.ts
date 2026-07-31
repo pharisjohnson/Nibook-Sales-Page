@@ -33,6 +33,7 @@ export function getSignupBusinessName(user: unknown): string {
   const meta = (u.user_metadata ?? u.raw_user_meta_data) as Record<string, unknown> | undefined;
   const fromUser =
     (typeof u.name === "string" ? u.name : "") ||
+    (typeof u.displayName === "string" ? u.displayName : "") ||
     (typeof meta?.business_name === "string" ? meta.business_name : "") ||
     (typeof meta?.name === "string" ? meta.name : "");
   return (fromUser.trim() || getPendingBusinessName()).trim();

@@ -26,7 +26,7 @@ export function getStoredToken(): string | null {
 
 export async function uploadFile(
   file: File,
-  folder: "profiles" | "services" | "team",
+  folder: "logos" | "covers" | "services" | "team",
 ): Promise<{ url: string | null; error: string | null }> {
   const token = localStorage.getItem(TOKEN_KEY);
   try {

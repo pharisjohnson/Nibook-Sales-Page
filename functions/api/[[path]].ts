@@ -141,6 +141,10 @@ async function route(method: string, path: string, url: URL, request: Request): 
   // Upload
   if (path === "/upload" && method === "POST") return handleUpload(request);
 
+  // Image serving (from R2)
+  const img = path.match(/^\/images\/(.+)$/);
+  if (img && method === "GET") return handleServeImage(img[1]);
+
   // Admin
   if (path === "/admin/stats" && method === "GET") return handleAdminStats(request);
   if (path === "/admin/users" && method === "GET") return handleAdminUsers(request, url);
@@ -569,28 +573,69 @@ async function handleTeamMemberDelete(id: string): Promise<Response> {
   return json({ success: true });
 }
 
-// ---- Upload ----
+// ---- Upload & Image Serving ----
+
+const ALLOWED_IMAGE_TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/jpg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif" };
 
 async function handleUpload(request: Request): Promise<Response> {
-  const auth = request.headers.get("Authorization");
-  if (!auth?.startsWith("Bearer ")) return json({ error: "Not authenticated" }, 401);
+  const { id: userId } = await requireAuth(request);
+
   const ct = (request.headers.get("Content-Type") ?? "").split(";")[0].trim();
-  const TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/jpg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif" };
-  const ext = TYPES[ct];
+  const ext = ALLOWED_IMAGE_TYPES[ct];
   if (!ext) return json({ error: `Unsupported image type: ${ct}` }, 400);
 
   const url = new URL(request.url);
-  const folder = String(url.searchParams.get("folder") ?? "misc").replace(/[^a-z0-9-_]/gi, "");
-  const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-  const filepath = `${folder}/${filename}`;
+  const rawFolder = url.searchParams.get("folder") ?? "misc";
+  // Map frontend folder names to storage paths
+  const folderMap: Record<string, string> = {
+    "profiles": "logos", "logos": "logos",
+    "covers": "covers",
+    "services": "services",
+    "team": "team",
+  };
+  const folder = (folderMap[rawFolder] ?? "misc").replace(/[^a-z0-9-_]/gi, "");
+  const uuid = crypto.randomUUID();
+  const filepath = `${folder}/${userId}_${uuid}.${ext}`;
 
   const buf = await request.arrayBuffer();
   if (!buf || buf.byteLength === 0) return json({ error: "Empty file body" }, 400);
   if (buf.byteLength > 10 * 1024 * 1024) return json({ error: "File too large (max 10 MB)" }, 413);
 
+  // Try R2 first
+  const r2 = (globalThis as any).env?.NIBOOK_IMAGES;
+  if (r2) {
+    await r2.put(filepath, new Uint8Array(buf), { httpMetadata: { contentType: ct } });
+    return json({ url: `/api/images/${filepath}` });
+  }
+
+  // Fallback to InsForge storage
   const { data, error: err } = await storage.from("nibook-media").upload(filepath, new Blob([new Uint8Array(buf)], { type: ct }));
   if (err || !data) return json({ error: (err as any)?.message ?? "Upload failed" }, 500);
   return json({ url: storage.from("nibook-media").getPublicUrl(filepath) });
+}
+
+async function handleServeImage(imagePath: string): Promise<Response> {
+  // Sanitise path — allow only alphanumeric, underscores, hyphens, slashes, dots
+  if (!/^[a-z0-9_\-\.\/]+$/i.test(imagePath)) return new Response("Invalid path", { status: 400 });
+
+  const r2 = (globalThis as any).env?.NIBOOK_IMAGES;
+  if (!r2) return new Response("Image storage not available", { status: 503 });
+
+  try {
+    const obj = await r2.get(imagePath);
+    if (!obj) return new Response("Not found", { status: 404 });
+
+    const headers = new Headers({
+      "Content-Type": obj.httpMetadata?.contentType ?? "application/octet-stream",
+      "Cache-Control": "public, max-age=31536000, immutable",
+    });
+    // Support conditional requests
+    if (obj.etag) headers.set("ETag", obj.etag);
+
+    return new Response(obj.body, { headers });
+  } catch (err) {
+    return json({ error: String(err) }, 500);
+  }
 }
 
 // ---- Admin ----

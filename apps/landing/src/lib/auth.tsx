@@ -3,6 +3,7 @@ import type { UserSchema } from "@insforge/sdk";
 import { insforge } from "./insforge";
 import { setSession, clearSession, getStoredUser, apiFetch } from "./api";
 import { identifyUser, resetAnalyticsUser, track } from "./analytics";
+import { setPendingBusinessName } from "./signup-business";
 
 type InsforgeUser = UserSchema;
 
@@ -66,6 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (data?.requireEmailVerification) {
       setPendingEmail(email);
       setEmailVerificationSent(true);
+      setPendingBusinessName(businessName);
       sessionStorage.setItem(PENDING_SIGNUP_KEY, JSON.stringify({ email, password, businessName }));
       return { error: null, needsEmailVerification: true };
     }
@@ -73,6 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (data?.user?.id) {
       setUser(data.user);
       if (data.token) setSession({ id: data.user.id, email: data.user.email ?? "" }, data.token);
+      setPendingBusinessName(businessName);
       identifyUser(data.user.id, data.user.email ?? "", businessName);
       track.signedUp();
     }

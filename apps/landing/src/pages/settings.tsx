@@ -174,7 +174,7 @@ export default function SettingsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadingCover(true);
-    const { url, error } = await uploadFile(file, "profiles");
+    const { url, error } = await uploadFile(file, "covers");
     setUploadingCover(false);
     if (error || !url) { toast({ title: "Upload failed", description: error ?? "Try again", variant: "destructive" }); return; }
     setCoverUrl(url);
@@ -185,7 +185,7 @@ export default function SettingsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadingLogo(true);
-    const { url, error } = await uploadFile(file, "profiles");
+    const { url, error } = await uploadFile(file, "logos");
     setUploadingLogo(false);
     if (error || !url) { toast({ title: "Upload failed", description: error ?? "Try again", variant: "destructive" }); return; }
     setLogoUrl(url);
