@@ -57,7 +57,11 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     if (!user) { setProfile(null); return; }
     setLoading(true);
     apiFetch<{ data: Profile }>(`/profile/${user.id}`).then(({ data }) => {
-      if (data?.data) setProfile(data.data);
+      if (data?.data) {
+        const p = data.data;
+        // Server column is subscription_plan; the UI reads `plan`.
+        setProfile({ ...p, plan: (p as any).subscription_plan ?? p.plan });
+      }
       setLoading(false);
     });
   }, [user, tick]);

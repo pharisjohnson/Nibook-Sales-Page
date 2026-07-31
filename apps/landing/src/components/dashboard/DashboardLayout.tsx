@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { useProfile } from "@/lib/profile";
+import TrialAlertBanner from "@/components/dashboard/TrialAlertBanner";
 
 const navLinks = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -136,6 +137,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Page Content */}
         <div className="flex-1 p-4 md:p-8 overflow-y-auto">
+          <TrialAlertBanner />
           {children}
         </div>
       </main>

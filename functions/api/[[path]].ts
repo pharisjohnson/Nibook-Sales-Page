@@ -1,5 +1,6 @@
-import { db, insforgeAuth, storage } from "./_lib/insforge";
+import { db, insforgeAuth, storage, sendEmail } from "./_lib/insforge";
 import { json, error, handleOptions, corsHeaders } from "./_lib/response";
+import { computeTrialStatus, sendTrialAlert, sweepTrialAlerts } from "./_lib/trial";
 
 const PAYHERO_BASE = "https://backend.payhero.co.ke/api/v2";
 const PAYSTACK_BASE = "https://api.paystack.co";
@@ -95,6 +96,11 @@ async function route(method: string, path: string, url: URL, request: Request): 
   if (path === "/subscriptions/initialize" && method === "POST") return handleSubInit(request, body);
   if (/^\/subscriptions\/verify\//.test(path) && method === "GET") return handleSubVerify(path.split("/").pop()!);
   if (path === "/subscriptions/webhook" && method === "POST") return handleSubWebhook(request);
+
+  // Trial / upgrade alerts
+  if (path === "/trial/status" && method === "GET") return handleTrialStatus(request);
+  if (path === "/trial/remind" && method === "POST") return handleTrialRemind(request);
+  if (path === "/trial/sweep" && method === "POST") return handleTrialSweep(request);
 
   // Bookings
   if (path === "/bookings" && method === "GET") return handleBookingsGet(url);
@@ -335,6 +341,44 @@ async function handleSubWebhook(request: Request): Promise<Response> {
     }
   } catch (e) { console.error("[Paystack webhook]", ev.event, e); }
   return json({ received: true });
+}
+
+// ---- Trial / upgrade alerts ----
+
+async function handleTrialStatus(request: Request): Promise<Response> {
+  try {
+    const user = await requireAuth(request);
+    const { data, error: err } = await db.from("profiles").select("*").eq("user_id", user.id).single();
+    if (err) return json({ data: { onTrial: true, daysLeft: 7, trialEndsAt: null, expired: false, stage: "none" } });
+    return json({ data: computeTrialStatus(data ?? null) });
+  } catch (err: any) {
+    if (err instanceof AuthError) return json({ error: err.message }, 401);
+    return error(String(err));
+  }
+}
+
+async function handleTrialRemind(request: Request): Promise<Response> {
+  try {
+    const user = await requireAuth(request);
+    if (!user.email) return json({ sent: false, stage: "none", reason: "no email on account" });
+    const { data, error: err } = await db.from("profiles").select("*").eq("user_id", user.id).single();
+    if (err || !data) return json({ sent: false, stage: "none", reason: "no profile yet" });
+    const result = await sendTrialAlert(data, user.email);
+    return json(result);
+  } catch (err: any) {
+    if (err instanceof AuthError) return json({ error: err.message }, 401);
+    return error(String(err));
+  }
+}
+
+async function handleTrialSweep(request: Request): Promise<Response> {
+  try {
+    const key = request.headers.get("x-admin-key") ?? "";
+    const expected = getEnv("TRIAL_SWEEP_KEY") || getEnv("ADMIN_SECRET_KEY");
+    if (!key || !expected || key !== expected) return json({ error: "Unauthorized" }, 401);
+    const result = await sweepTrialAlerts();
+    return json(result);
+  } catch (err: any) { return error(String(err)); }
 }
 
 // ---- Bookings ----

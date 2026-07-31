@@ -15,6 +15,7 @@ import AuthVerifyPage from "@/pages/auth-verify";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import SubscriptionCallbackPage from "@/pages/subscription-callback";
+import UpgradePage from "@/pages/upgrade";
 import { useAuth } from "@/lib/auth";
 import { useProfile } from "@/lib/profile";
 import DashboardHome from "@/pages/dashboard";
@@ -69,6 +70,9 @@ function Router() {
       <Route path="/waitlist" component={WaitlistPage} />
       <Route path="/auth/verify" component={AuthVerifyPage} />
       <Route path="/subscription/callback" component={SubscriptionCallbackPage} />
+      <Route path="/upgrade">
+        <ProtectedDashboard><UpgradePage /></ProtectedDashboard>
+      </Route>
       <Route path="/onboarding">
         <ProtectedOnboarding><OnboardingPage /></ProtectedOnboarding>
       </Route>
