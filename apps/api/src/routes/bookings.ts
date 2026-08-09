@@ -65,7 +65,7 @@ router.post("/bookings", async (req: Request, res: Response) => {
         db2.database
           .from("profiles")
           .select("google_refresh_token, google_access_token, business_name")
-          .eq("id", owner_id as string)
+          .eq("user_id", owner_id as string)
           .single()
           .then(({ data: profile }) => {
             if (!profile?.google_refresh_token) return;

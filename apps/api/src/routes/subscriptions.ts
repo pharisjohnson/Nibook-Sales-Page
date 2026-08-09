@@ -153,7 +153,7 @@ router.get("/subscriptions/verify/:reference", async (req: Request, res: Respons
           paystack_customer_code: tx.customer.customer_code,
           subscription_code: tx.subscription_code ?? null,
           subscription_started_at: tx.paid_at ?? new Date().toISOString(),
-        }).eq("id", ownerId);
+        }).eq("user_id", ownerId);
       }
     }
 

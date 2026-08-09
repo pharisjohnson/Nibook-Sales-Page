@@ -33,18 +33,22 @@ router.post("/mcp/generate-key", async (req: Request, res: Response) => {
   const db = getInsforgeAdmin();
   const { data: profile, error } = await db.database
     .from("profiles")
-    .select("plan")
-    .eq("id", user_id)
+    .select("subscription_plan")
+    .eq("user_id", user_id)
     .single();
 
   if (error || !profile) { res.status(404).json({ error: "Profile not found" }); return; }
-  if (!PAID_PLANS.includes((profile as any).plan ?? "")) {
+  if (!PAID_PLANS.includes((profile as any).subscription_plan ?? "")) {
     res.status(403).json({ error: "MCP access requires a Starter or Premium plan" });
     return;
   }
 
   const api_key = generateApiKey();
-  await db.database.from("profiles").update({ api_key }).eq("id", user_id);
+  const { error: updErr } = await db.database.from("profiles").update({ api_key }).eq("user_id", user_id);
+  if (updErr) {
+    res.status(500).json({ error: `Could not store API key: ${updErr.message}` });
+    return;
+  }
   res.json({ api_key });
 });
 
@@ -279,13 +283,13 @@ router.post("/mcp", async (req: Request, res: Response) => {
 
   // ── get_profile ──────────────────────────────────────────────────────────────
   server.tool("get_profile", "Get business profile — name, slug, category, location, and plan.", {}, async () => {
-    const { data: p } = await db.database.from("profiles").select("business_name, category, location, phone, plan, slug, google_calendar_email").eq("id", OWNER_ID).single();
+    const { data: p } = await db.database.from("profiles").select("business_name, category, location, phone, subscription_plan, slug").eq("user_id", OWNER_ID).single();
     const pr = p as any;
-    const APP_URL = process.env.APP_URL ?? "https://nibook.noonstudio.africa";
+    const APP_URL = process.env.APP_URL ?? "https://nibook.pages.dev";
     return {
       content: [{
         type: "text" as const,
-        text: [`🏪 ${pr?.business_name ?? "Unnamed business"}`, `Category:     ${pr?.category ?? "Not set"}`, `Location:     ${pr?.location ?? "Not set"}`, `Phone:        ${pr?.phone ?? "Not set"}`, `Plan:         ${pr?.plan ?? "trial"}`, `Booking link: ${APP_URL}/${pr?.slug ?? ""}`, `Google Cal:   ${pr?.google_calendar_email ?? "Not connected"}`].join("\n"),
+        text: [`🏪 ${pr?.business_name ?? "Unnamed business"}`, `Category:     ${pr?.category ?? "Not set"}`, `Location:     ${pr?.location ?? "Not set"}`, `Phone:        ${pr?.phone ?? "Not set"}`, `Plan:         ${pr?.subscription_plan ?? "trial"}`, `Booking link: ${APP_URL}/${pr?.slug ?? ""}`].join("\n"),
       }],
     };
   });

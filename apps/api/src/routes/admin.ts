@@ -115,11 +115,11 @@ router.post("/admin/cleanup-expired-trials", async (_req: Request, res: Response
     const db = getInsforgeAdmin();
     const { data: expired } = await db.database
       .from("profiles")
-      .select("id, business_name, created_at")
-      .eq("plan", "trial")
+      .select("user_id, business_name, created_at")
+      .eq("subscription_plan", "trial")
       .lt("created_at", eightDaysAgo);
 
-    const ids = (expired ?? []).map((r: any) => r.id);
+    const ids = (expired ?? []).map((r: any) => r.user_id);
     if (ids.length === 0) {
       res.json({ deleted: 0, message: "No expired trials to clean up" });
       return;
@@ -129,11 +129,11 @@ router.post("/admin/cleanup-expired-trials", async (_req: Request, res: Response
     await db.database.from("services").delete().in("owner_id", ids);
 
     // Delete profiles (cascades to bookings, availability, team, etc.)
-    await db.database.from("profiles").delete().in("id", ids);
+    await db.database.from("profiles").delete().in("user_id", ids);
 
     res.json({
       deleted: ids.length,
-      profiles: (expired ?? []).map((r: any) => ({ id: r.id, name: r.business_name, created_at: r.created_at })),
+      profiles: (expired ?? []).map((r: any) => ({ user_id: r.user_id, name: r.business_name, created_at: r.created_at })),
     });
   } catch (err) {
     res.status(500).json({ error: String(err) });

@@ -8,7 +8,7 @@ router.get("/profile/:id", async (req: Request, res: Response) => {
   const { id } = req.params;
   try {
     const db = getInsforgeAdmin();
-    const { data, error } = await db.database.from("profiles").select("*").eq("id", id).single();
+    const { data, error } = await db.database.from("profiles").select("*").eq("user_id", id).single();
     if (error) { res.status(404).json({ error: "Profile not found" }); return; }
     res.json({ data });
   } catch (err) {
@@ -21,14 +21,14 @@ router.patch("/profile/:id", requireAuth, async (req: Request, res: Response) =>
   const updates = req.body as Record<string, unknown>;
   const allowed = [
     "business_name", "slug", "phone", "location", "bio", "category",
-    "logo_url", "cover_url", "onboarding_completed", "plan", "avatar_url",
+    "logo_url", "cover_url", "onboarding_completed", "subscription_plan", "avatar_url",
     "mpesa_paybill", "mpesa_account", "whatsapp_enabled", "whatsapp_phone",
     "reminder_hours", "cancellation_policy", "booking_widget_theme",
   ];
   const safe = Object.fromEntries(Object.entries(updates).filter(([k]) => allowed.includes(k)));
   try {
     const db = getInsforgeAdmin();
-    const { data, error } = await db.database.from("profiles").update(safe).eq("id", id).select().single();
+    const { data, error } = await db.database.from("profiles").update(safe).eq("user_id", id).select().single();
     if (error) { res.status(500).json({ error: error.message }); return; }
     res.json({ data });
   } catch (err) {
